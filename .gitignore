@@ -1,0 +1,57 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+Thumbs.db
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ / Android Studio
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code / Cursor (local editor settings)
+.vscode/
+*.code-workspace
+
+# Flutter/Dart/Pub
+**/doc/api/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+**/build/
+.android/
+/coverage/
+
+# Symbolication
+app.*.symbols
+
+# Obfuscation
+app.*.map.json
+
+# Android build outputs
+/android/app/debug
+/android/app/profile
+/android/app/release
+android/build/
+
+# Signing — never commit these
+android/key.properties
+**/*.keystore
+**/*.jks
+
+# Secrets / local environment
+.env
+.env.*
+*.env
