@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/app_controller.dart';
 import '../core/config.dart';
@@ -123,6 +124,262 @@ class _ResourceListScreenState extends State<ResourceListScreen> {
   }
 }
 
+// ───────── التصنيفات (مطابق seller/seller_categories + main_categories + product_count) ─────────
+class CategoriesScreen extends StatefulWidget {
+  const CategoriesScreen({super.key});
+  @override
+  State<CategoriesScreen> createState() => _CategoriesScreenState();
+}
+
+class _CategoriesScreenState extends State<CategoriesScreen> {
+  List<Map<String, dynamic>> mine = [];
+  List<Map<String, dynamic>> main = [];
+  List<Map<String, dynamic>> counts = [];
+  bool loading = true;
+  String? error;
+
+  Future<void> _load() async {
+    if (mounted) setState(() { loading = true; error = null; });
+    final a = await app.api.categories();
+    final b = await app.api.mainCategories();
+    final c = await app.api.categoriesProductCount();
+    if (!mounted) return;
+    setState(() {
+      mine = a.dataMaps;
+      main = b.dataMaps;
+      counts = c.dataMaps;
+      loading = false;
+      error = a.ok ? null : a.failMessage;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('التصنيفات'),
+          bottom: const TabBar(tabs: [Tab(text: 'تصنيفاتي'), Tab(text: 'الرئيسية'), Tab(text: 'منتجاتي')]),
+        ),
+        floatingActionButton: app.canWrite
+            ? FloatingActionButton(onPressed: () => _form(), child: const Icon(Icons.add))
+            : null,
+        body: FetchBody(
+          loading: loading,
+          onRefresh: _load,
+          error: error,
+          isEmpty: false,
+          child: TabBarView(
+            children: [
+              _mineList(),
+              _list(main, empty: 'لا توجد تصنيفات رئيسية'),
+              counts.isEmpty
+                  ? const EmptyBox('لا توجد إحصائيات بعد', icon: Icons.category_outlined)
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: counts.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) {
+                        final c = counts[i];
+                        return ListTile(
+                          tileColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          title: Text(J.str(c['name'])),
+                          trailing: Text(J.str(c['product_count'], '0'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                        );
+                      },
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _list(List<Map<String, dynamic>> items, {required String empty}) {
+    if (items.isEmpty) return EmptyBox(empty, icon: Icons.category_outlined);
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final c = items[i];
+        return ListTile(
+          tileColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(J.str(c['name'])),
+          subtitle: Text(J.str(c['subtitle'] ?? c['slug'] ?? '')),
+        );
+      },
+    );
+  }
+
+  Future<void> _form([Map<String, dynamic>? item]) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => CategoryFormScreen(item: item)),
+    );
+    if (saved == true && mounted) _load();
+  }
+
+  Widget _mineList() {
+    if (mine.isEmpty) return const EmptyBox('لا توجد تصنيفات مربوطة بمتجرك', icon: Icons.category_outlined);
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: mine.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final c = mine[i];
+        return ListTile(
+          tileColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(J.str(c['name'])),
+          subtitle: Text(J.str(c['subtitle'] ?? c['slug'] ?? '')),
+          trailing: app.canWrite
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'تعديل',
+                      icon: const Icon(Icons.edit_outlined),
+                      onPressed: () => _form(c),
+                    ),
+                    IconButton(
+                      tooltip: 'حذف',
+                      icon: Icon(Icons.delete_outline, color: AppColors.error),
+                      onPressed: () async {
+                        final ok = await confirmAction(context,
+                            title: 'حذف التصنيف', body: 'حذف ${J.str(c['name'])}؟', confirmLabel: 'حذف');
+                        if (!ok || !context.mounted) return;
+                        final r = await app.api.deleteCategory(c['id']);
+                        if (!context.mounted) return;
+                        toast(context, r.ok ? 'تم الحذف' : r.message);
+                        if (r.ok) _load();
+                      },
+                    ),
+                  ],
+                )
+              : null,
+        );
+      },
+    );
+  }
+}
+
+// ───────── نموذج التصنيف (إضافة/تعديل) ─────────
+// Web parity: views/Category/Edit.vue — FormData {name, slug, subtitle, image, status, parent_id}
+class CategoryFormScreen extends StatefulWidget {
+  const CategoryFormScreen({super.key, this.item});
+  final Map<String, dynamic>? item;
+  @override
+  State<CategoryFormScreen> createState() => _CategoryFormScreenState();
+}
+
+class _CategoryFormScreenState extends State<CategoryFormScreen> {
+  final name = TextEditingController();
+  final subtitle = TextEditingController();
+  int status = 1;
+  String? imagePath;
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final it = widget.item;
+    if (it != null) {
+      name.text = J.str(it['name']);
+      subtitle.text = J.str(it['subtitle']);
+      status = J.i(it['status'], 1);
+    }
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    subtitle.dispose();
+    super.dispose();
+  }
+
+  static String slugify(String v) => v
+      .trim()
+      .replaceAll(RegExp(r'\s+'), '-')
+      .replaceAll(RegExp(r'[^\w\u0600-\u06FF\-]'), '')
+      .replaceAll(RegExp(r'-+'), '-');
+
+  Future<void> _save() async {
+    if (name.text.trim().isEmpty) {
+      toast(context, 'أدخل اسم التصنيف');
+      return;
+    }
+    if (!await confirmWrite(context)) return;
+    setState(() => busy = true);
+    final map = <String, dynamic>{
+      'name': name.text.trim(),
+      'slug': slugify(name.text),
+      'subtitle': subtitle.text.trim(),
+      'status': status,
+      if (widget.item != null) 'id': widget.item!['id'],
+    };
+    if (imagePath != null) {
+      map['image'] = await MultipartFile.fromFile(imagePath!, filename: 'category.jpg');
+    }
+    final data = FormData.fromMap(map);
+    final r = widget.item == null ? await app.api.saveCategory(data) : await app.api.updateCategory(data);
+    if (!mounted) return;
+    setState(() => busy = false);
+    toast(context, r.ok ? 'تم الحفظ' : r.message);
+    if (r.ok && context.mounted) Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final it = widget.item;
+    final currentImg = J.str(it?['image'] ?? it?['image_url']);
+    return Scaffold(
+      appBar: AppBar(title: Text(it == null ? 'إضافة تصنيف' : 'تعديل تصنيف')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم *', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          TextField(controller: subtitle, decoration: const InputDecoration(labelText: 'الوصف المختصر', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          SwitchListTile(title: const Text('نشط'), value: status == 1, onChanged: (v) => setState(() => status = v ? 1 : 0)),
+          const SizedBox(height: 6),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final file = await pickStoreImage(context, reason: 'سنفتح المعرض لاختيار صورة التصنيف فقط.');
+              if (file != null && mounted) setState(() => imagePath = file.path);
+            },
+            icon: const Icon(Icons.image_outlined),
+            label: Text(imagePath != null ? 'تم اختيار الصورة' : 'صورة التصنيف${it == null ? ' *' : ''}'),
+          ),
+          if (imagePath == null && currentImg.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(AppConfig.fileUrl(app.apiUrl, currentImg),
+                    height: 90, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox()),
+              ),
+            ),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: busy ? null : _save, child: busy ? const BusySpinner() : const Text('حفظ')),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+        ],
+      ),
+    );
+  }
+}
+
 class PromoFormScreen extends StatefulWidget {
   const PromoFormScreen({super.key, this.item});
   final Map<String, dynamic>? item;
@@ -143,12 +400,18 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
   String end = '';
   String discountType = 'percentage';
   bool repeatUsage = true;
+  String scopeType = 'all';
+  String? scopeCategoryId;
+  List<Map<String, dynamic>> scopeCategories = [];
   String? imagePath;
   bool busy = false;
 
   @override
   void initState() {
     super.initState();
+    app.api.categories().then((res) {
+      if (mounted) setState(() => scopeCategories = res.dataMaps);
+    });
     final item = widget.item;
     if (item != null) {
       code.text = J.str(item['promo_code']);
@@ -162,6 +425,9 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
       end = J.str(item['end_date']);
       discountType = J.str(item['discount_type'], 'percentage');
       repeatUsage = J.flag(item['repeat_usage']);
+      scopeType = J.str(item['scope_type'], 'all');
+      final sc = item['scope_id'];
+      if (sc != null && '$sc'.isNotEmpty) scopeCategoryId = '$sc';
     }
   }
 
@@ -181,8 +447,8 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.item == null ? 'كود خصم جديد' : 'تعديل كود خصم')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
         children: [
           labeledField(code, 'الكود'),
           labeledField(message, 'الرسالة', maxLines: 2),
@@ -202,6 +468,25 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
           labeledField(maxDiscount, 'أقصى خصم', type: TextInputType.number),
           SwitchListTile(title: const Text('استخدام متكرر'), value: repeatUsage, onChanged: (v) => setState(() => repeatUsage = v)),
           if (repeatUsage) labeledField(repeats, 'مرات التكرار', type: TextInputType.number),
+          DropdownButtonFormField<String>(
+            initialValue: scopeType,
+            items: const [
+              DropdownMenuItem(value: 'all', child: Text('كل المتجر')),
+              DropdownMenuItem(value: 'category', child: Text('تصنيف محدد')),
+            ],
+            onChanged: (v) => setState(() => scopeType = v ?? 'all'),
+            decoration: const InputDecoration(labelText: 'نطاق الكود (مطابق الباكند)', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 10),
+          if (scopeType == 'category')
+            DropdownButtonFormField<String>(
+              key: ValueKey('promo-scope-${scopeCategories.length}-$scopeCategoryId'),
+              initialValue: dropdownId(scopeCategoryId, scopeCategories),
+              items: scopeCategories.map((c) => DropdownMenuItem(value: '${c['id']}', child: Text(J.str(c['name'])))).toList(),
+              onChanged: (v) => setState(() => scopeCategoryId = v),
+              decoration: const InputDecoration(labelText: 'التصنيف', border: OutlineInputBorder()),
+            ),
+          if (scopeType == 'category') const SizedBox(height: 10),
           ListTile(
             title: Text(start.isEmpty ? 'تاريخ البداية' : start),
             trailing: const Icon(Icons.event),
@@ -257,7 +542,8 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
                       'repeat_usage': repeatUsage ? 1 : 0,
                       'no_of_repeat_usage': repeats.text,
                       'status': 1,
-                      'scope_type': 'all',
+                      'scope_type': scopeType,
+                      if (scopeType == 'category' && scopeCategoryId != null) 'scope_id': scopeCategoryId,
                       if (widget.item != null) 'id': widget.item!['id'],
                     };
                     if (imagePath != null) {
@@ -272,8 +558,9 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
                   },
             child: busy ? const BusySpinner() : const Text('حفظ'),
           ),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
         ],
-      ),
+      )),
     );
   }
 }
@@ -320,8 +607,8 @@ class _FlashFormScreenState extends State<FlashFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.item == null ? 'عرض فلاش جديد' : 'تعديل عرض فلاش')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
         children: [
           labeledField(title, 'العنوان'),
           labeledField(description, 'الوصف', maxLines: 3),
@@ -382,8 +669,9 @@ class _FlashFormScreenState extends State<FlashFormScreen> {
                   },
             child: busy ? const BusySpinner() : const Text('حفظ'),
           ),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
         ],
-      ),
+      )),
     );
   }
 }
@@ -431,8 +719,8 @@ class _BxgyFormScreenState extends State<BxgyFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.item == null ? 'عرض اشترِ واحصل' : 'تعديل العرض')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
         children: [
           labeledField(title, 'العنوان (اختياري)'),
           DropdownButtonFormField<String>(
@@ -505,8 +793,9 @@ class _BxgyFormScreenState extends State<BxgyFormScreen> {
                   },
             child: busy ? const BusySpinner() : const Text('حفظ'),
           ),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
         ],
-      ),
+      )),
     );
   }
 }
@@ -552,8 +841,8 @@ class _CategoryDiscountFormScreenState extends State<CategoryDiscountFormScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.item == null ? 'خصم تصنيف' : 'تعديل خصم تصنيف')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(child: ListView(
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
         children: [
           labeledField(title, 'العنوان'),
           DropdownButtonFormField<String>(
@@ -623,8 +912,9 @@ class _CategoryDiscountFormScreenState extends State<CategoryDiscountFormScreen>
                   },
             child: busy ? const BusySpinner() : const Text('حفظ'),
           ),
+          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
         ],
-      ),
+      )),
     );
   }
 }
@@ -782,12 +1072,14 @@ class _MediaScreenState extends State<MediaScreen> {
   List<Map<String, dynamic>> items = [];
   bool loading = true;
   String? error;
+  final selected = <dynamic>{};
 
   Future<void> _load() async {
     final result = await app.api.media();
     if (!mounted) return;
     setState(() {
       items = result.dataMaps;
+      selected.clear();
       loading = false;
       error = result.ok ? null : result.failMessage;
     });
@@ -802,7 +1094,28 @@ class _MediaScreenState extends State<MediaScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('الميديا')),
+      appBar: AppBar(
+        title: Text(selected.isEmpty ? 'الميديا' : 'محدد (${selected.length})'),
+        actions: [
+          if (selected.isNotEmpty && app.canWrite)
+            IconButton(
+              tooltip: 'حذف المحدد',
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: () async {
+                final ok = await confirmAction(context,
+                    title: 'حذف جماعي', body: 'حذف ${selected.length} ملفات؟', confirmLabel: 'حذف');
+                if (!ok || !context.mounted) return;
+                final r = await app.api.deleteMediaBulk(selected.toList());
+                if (!context.mounted) return;
+                toast(context, r.ok ? 'تم الحذف الجماعي' : r.message);
+                if (r.ok) {
+                  setState(() => selected.clear());
+                  _load();
+                }
+              },
+            ),
+        ],
+      ),
       floatingActionButton: null,
       body: FetchBody(
         loading: loading,
@@ -838,10 +1151,12 @@ class _MediaScreenState extends State<MediaScreen> {
                 ),
               ),
             Expanded(
-              child: GridView.builder(
+              child: LayoutBuilder(builder: (ctx, c) {
+                final cols = c.maxWidth > 900 ? 5 : c.maxWidth > 600 ? 4 : 3;
+                return GridView.builder(
                     padding: const EdgeInsets.all(12),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
                     ),
@@ -852,49 +1167,71 @@ class _MediaScreenState extends State<MediaScreen> {
                         app.apiUrl,
                         '${item['sub_directory'] ?? ''}${item['name'] ?? item['image'] ?? ''}',
                       );
-                      return ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.network(
-                              url,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const ColoredBox(color: AppColors.greyBg, child: Icon(Icons.image, color: AppColors.textSecondary)),
-                            ),
-                            if (app.canWrite)
-                              Align(
-                                alignment: Alignment.topLeft,
-                                child: Container(
-                                  margin: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.navy.withValues(alpha: 0.7),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(Icons.delete, color: AppColors.white, size: 20),
-                                    onPressed: () async {
-                                      final ok = await confirmAction(
-                                        context,
-                                        title: 'حذف الملف',
-                                        body: 'هل تريد حذف هذا الملف؟',
-                                        confirmLabel: 'حذف',
-                                      );
-                                      if (!ok || !context.mounted) return;
-                                      final result = await app.api.deleteMedia(item['id']);
-                                      if (!context.mounted) return;
-                                      toast(context, result.ok ? 'تم الحذف' : result.message);
-                                      if (result.ok) _load();
-                                    },
+                      final sel = selected.contains(item['id']);
+                      return InkWell(
+                        onLongPress: app.canWrite
+                            ? () => setState(() {
+                                  sel ? selected.remove(item['id']) : selected.add(item['id']);
+                                })
+                            : null,
+                        onTap: app.canWrite && selected.isNotEmpty
+                            ? () => setState(() {
+                                  sel ? selected.remove(item['id']) : selected.add(item['id']);
+                                })
+                            : null,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.network(
+                                url,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    ColoredBox(color: AppColors.greyBg, child: Icon(Icons.image, color: AppColors.textSecondary)),
+                              ),
+                              if (sel)
+                                Container(
+                                  color: AppColors.navy.withValues(alpha: 0.45),
+                                  child: const Icon(Icons.check_circle, color: Colors.white, size: 32),
+                                ),
+                              if (app.canWrite && !sel)
+                                Align(
+                                  alignment: Alignment.topLeft,
+                                  child: Container(
+                                    margin: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.navy.withValues(alpha: 0.7),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: IconButton(
+                                      iconSize: 20,
+                                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                      padding: const EdgeInsets.all(6),
+                                      icon: Icon(Icons.delete, color: AppColors.white, size: 18),
+                                      onPressed: () async {
+                                        final ok = await confirmAction(
+                                          context,
+                                          title: 'حذف الملف',
+                                          body: 'هل تريد حذف هذا الملف؟',
+                                          confirmLabel: 'حذف',
+                                        );
+                                        if (!ok || !context.mounted) return;
+                                        final result = await app.api.deleteMedia(item['id']);
+                                        if (!context.mounted) return;
+                                        toast(context, result.ok ? 'تم الحذف' : result.message);
+                                        if (result.ok) _load();
+                                      },
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
                       );
                     },
-              ),
+                );
+              }),
             ),
           ],
         ),
@@ -941,16 +1278,13 @@ class _RatingsScreenState extends State<RatingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('تقييمات المنتجات')),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : error != null
-              ? Refreshable(
-                  onRefresh: _load,
-                  child: EmptyBox(error!, icon: Icons.wifi_off_outlined, actionLabel: 'إعادة المحاولة', onAction: () { _load(); }),
-                )
-          : products.isEmpty
-              ? const EmptyBox('لا توجد منتجات لعرض تقييماتها')
-          : Column(
+      body: FetchBody(
+        loading: loading,
+        onRefresh: _load,
+        error: error,
+        isEmpty: products.isEmpty,
+        emptyText: 'لا توجد منتجات لعرض تقييماتها',
+        child: Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
@@ -980,6 +1314,9 @@ class _RatingsScreenState extends State<RatingsScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
+                                        tooltip: J.flag(r['status'])
+                                            ? 'إخفاء'
+                                            : 'إظهار',
                                         icon: Icon(J.flag(r['status']) ? Icons.visibility : Icons.visibility_off),
                                         onPressed: () async {
                                           await app.api.updateRatingStatus(id: r['id'], status: J.flag(r['status']) ? 0 : 1);
@@ -988,18 +1325,19 @@ class _RatingsScreenState extends State<RatingsScreen> {
                                         },
                                       ),
                                       IconButton(
-                                        icon: const Icon(Icons.delete_outline),
+                                        tooltip: 'حذف',
+                                        icon: Icon(Icons.delete_outline, color: AppColors.error),
                                         onPressed: () async {
-                                          final ok = await confirmAction(
-                                            context,
-                                            title: 'حذف التقييم',
-                                            body: 'هل تريد حذف هذا التقييم؟',
-                                            confirmLabel: 'حذف',
-                                          );
+                                          final ok = await confirmAction(context,
+                                              title: 'حذف التقييم', body: 'حذف هذا التقييم نهائياً؟', confirmLabel: 'حذف');
                                           if (!ok || !context.mounted) return;
-                                          await app.api.deleteRating(r['id']);
-                                          final res = await app.api.productRatings(productId: productId);
-                                          if (mounted) setState(() => ratings = res.dataMaps);
+                                          final res = await app.api.deleteRating(r['id']);
+                                          if (!context.mounted) return;
+                                          toast(context, res.ok ? 'تم الحذف' : res.message);
+                                          if (res.ok) {
+                                            final list = await app.api.productRatings(productId: productId);
+                                            if (mounted) setState(() => ratings = list.dataMaps);
+                                          }
                                         },
                                       ),
                                     ],
@@ -1012,6 +1350,7 @@ class _RatingsScreenState extends State<RatingsScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 }
@@ -1024,51 +1363,87 @@ class BulkUploadScreen extends StatefulWidget {
 
 class _BulkUploadScreenState extends State<BulkUploadScreen> {
   String? path;
+  String? fileName;
   bool busy = false;
+  String? resultText;
+  bool resultOk = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('رفع منتجات جماعي')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text('اختر ملف CSV بنفس قالب لوحة الويب. تأكد أن seller_id وcategory_id صحيحان.'),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final picked = await pickStoreFiles(
-                  context,
-                  reason: 'سنفتح منتقي الملفات لاختيار ملف CSV للمنتجات فقط.',
-                  type: FileType.custom,
-                  extensions: const ['csv'],
-                );
-                if (picked?.files.single.path != null && mounted) {
-                  setState(() => path = picked!.files.single.path);
-                }
-              },
-              icon: const Icon(Icons.attach_file),
-              label: Text(path == null ? 'اختيار ملف CSV' : 'تم اختيار الملف'),
+      body: SafeArea(
+        child: LayoutBuilder(builder: (ctx, c) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: c.maxHeight - 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('اختر ملف Excel أو CSV. الأعمدة: اسم المنتج + السعر (إجباري)، الوصف، المخزون، سعر الخصم، القسم، الصورة.',
+                    style: TextStyle(fontSize: 13)),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final picked = await pickStoreFiles(
+                      context,
+                      reason: 'سنفتح منتقي الملفات لاختيار ملف المنتجات فقط.',
+                      type: FileType.custom,
+                      extensions: const ['csv', 'txt', 'xlsx', 'xls'],
+                    );
+                    if (picked?.files.single.path != null && mounted) {
+                      setState(() {
+                        path = picked!.files.single.path;
+                        fileName = picked.files.single.name;
+                        resultText = null;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(path == null ? 'اختيار ملف (CSV / Excel)' : 'تم: $fileName'),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: busy || path == null
+                      ? null
+                      : () async {
+                          if (!await confirmWrite(context)) return;
+                          setState(() {
+                            busy = true;
+                            resultText = null;
+                          });
+                          final result = await app.api.bulkUpload(FormData.fromMap({
+                            'file': await MultipartFile.fromFile(path!, filename: fileName ?? 'products.csv'),
+                          }));
+                          if (!mounted) return;
+                          setState(() {
+                            busy = false;
+                            resultOk = result.ok;
+                            // الباكند يرجع عدد المنشأة + أول 5 أخطاء صفوف داخل الرسالة
+                            resultText = result.ok ? result.message : result.message;
+                          });
+                          toast(context, result.ok ? 'اكتمل الاستيراد' : result.message);
+                        },
+                  child: busy ? const BusySpinner() : const Text('رفع'),
+                ),
+                if (resultText != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: resultOk ? Colors.green.withValues(alpha: 0.08) : Colors.red.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: resultOk ? Colors.green.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(resultText!, style: const TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: busy || path == null
-                  ? null
-                  : () async {
-                      if (!await confirmWrite(context)) return;
-                      setState(() => busy = true);
-                      final result = await app.api.bulkUpload(FormData.fromMap({
-                        'file': await MultipartFile.fromFile(path!, filename: 'products.csv'),
-                      }));
-                      if (!mounted) return;
-                      setState(() => busy = false);
-                      toast(context, result.ok ? 'تم الاستيراد' : result.message);
-                    },
-              child: busy ? const BusySpinner() : const Text('رفع'),
-            ),
-          ],
-        ),
+          ),
+        )),
       ),
     );
   }
@@ -1129,6 +1504,14 @@ class _AccountingScreenState extends State<AccountingScreen> {
                     _chip('فواتير', summary['invoices_count']),
                   ],
                 ),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  OutlinedButton.icon(onPressed: () async { final r = await app.api.accountingExportExcel(); if (!context.mounted) return; toast(context, r.ok ? 'تم تصدير الإكسل (خلفية)' : r.message); }, icon: const Icon(Icons.table_chart, size: 18), label: const Text('تصدير إكسل')),
+                  OutlinedButton.icon(onPressed: () async { final r = await app.api.accountingExportInvoices(); if (!context.mounted) return; toast(context, r.ok ? 'تم تصدير الفواتير (خلفية)' : r.message); }, icon: const Icon(Icons.receipt_long, size: 18), label: const Text('تصدير الفواتير')),
+                  OutlinedButton.icon(onPressed: () async { final r = await app.api.sellerCommission(); if (!context.mounted) return; toast(context, r.ok ? 'العمولة: ${r.dataMap['commission'] ?? r.dataMap}' : r.message); }, icon: const Icon(Icons.percent, size: 18), label: const Text('العمولة')),
+                ]),
+                const SizedBox(height: 12),
+                if (app.isHomeSeller) BrandedCard(child: Text('متجر منزلي — عمولة خاصة: تُحسب عبر home_commission', style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+                if (app.requireProductsApproval) BrandedCard(child: Text('تنبيه: المنتجات تتطلب موافقة الإدارة (require_products_approval)', style: TextStyle(fontSize: 13, color: AppColors.orange))),
                 const SizedBox(height: 16),
                 const Text('يومياً', style: TextStyle(fontWeight: FontWeight.bold)),
                 if (daily.isEmpty) const ListTile(title: Text('لا توجد بيانات يومية')),
@@ -1164,6 +1547,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   List<Map<String, dynamic>> sales = [];
   List<Map<String, dynamic>> products = [];
   bool loading = true;
+  String? error;
 
   String _iso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -1177,7 +1561,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() => loading = true);
+    if (mounted) setState(() { loading = true; error = null; });
     final a = await app.api.salesReports(startDate: start, endDate: end);
     final b = await app.api.productSalesReports(startDate: start, endDate: end);
     if (!mounted) return;
@@ -1185,6 +1569,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
       sales = a.list('salesReports').isNotEmpty ? a.list('salesReports') : a.dataMaps;
       products = b.dataMaps;
       loading = false;
+      if (!a.ok || !b.ok) {
+        error = a.ok ? b.failMessage : a.failMessage;
+      }
     });
   }
 
@@ -1207,25 +1594,30 @@ class _ReportsScreenState extends State<ReportsScreen> {
               _load();
             },
           ),
-          if (loading) const LinearProgressIndicator(),
           Expanded(
-            child: sales.isEmpty && products.isEmpty && !loading
-                ? const EmptyBox('لا توجد تقارير لهذه الفترة')
-                : ListView(
-              children: [
-                const ListTile(title: Text('المبيعات', style: TextStyle(fontWeight: FontWeight.bold))),
-                ...sales.map((s) => ListTile(
-                      title: Text(J.str(s['product_name'] ?? s['user_name'])),
-                      subtitle: Text(J.str(s['added_date'] ?? s['created_at'])),
-                      trailing: Text(J.str(s['sub_total'] ?? s['final_total'])),
-                    )),
-                const ListTile(title: Text('حسب المنتج', style: TextStyle(fontWeight: FontWeight.bold))),
-                ...products.map((p) => ListTile(
-                      title: Text(J.str(p['product_name'] ?? p['name'])),
-                      subtitle: Text('مبيعات ${p['total_sales'] ?? '-'}'),
-                      trailing: Text(J.str(p['total_price'] ?? p['sub_total'])),
-                    )),
-              ],
+            child: FetchBody(
+              loading: loading,
+              onRefresh: _load,
+              error: error,
+              isEmpty: sales.isEmpty && products.isEmpty,
+              emptyText: 'لا توجد تقارير لهذه الفترة',
+              emptyIcon: Icons.bar_chart_outlined,
+              child: ListView(
+                children: [
+                  const ListTile(title: Text('المبيعات', style: TextStyle(fontWeight: FontWeight.bold))),
+                  ...sales.map((s) => ListTile(
+                        title: Text(J.str(s['product_name'] ?? s['user_name'])),
+                        subtitle: Text(J.str(s['added_date'] ?? s['created_at'])),
+                        trailing: Text(J.str(s['sub_total'] ?? s['final_total'])),
+                      )),
+                  const ListTile(title: Text('حسب المنتج', style: TextStyle(fontWeight: FontWeight.bold))),
+                  ...products.map((p) => ListTile(
+                        title: Text(J.str(p['product_name'] ?? p['name'])),
+                        subtitle: Text('مبيعات ${p['total_sales'] ?? '-'}'),
+                        trailing: Text(J.str(p['total_price'] ?? p['sub_total'])),
+                      )),
+                ],
+              ),
             ),
           ),
         ],
@@ -1376,14 +1768,15 @@ class _MailSettingsScreenState extends State<MailSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('إشعارات الطلبات')),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : statuses.isEmpty
-              ? Refreshable(
-                  onRefresh: _load,
-                  child: const EmptyBox('لا توجد حالات طلب لضبط الإشعارات'),
-                )
-          : ListView(
+      body: FetchBody(
+        loading: loading,
+        onRefresh: _load,
+        error: null,
+        isEmpty: statuses.isEmpty,
+        emptyText: 'لا توجد حالات طلب لضبط الإشعارات',
+        emptyActionLabel: 'إعادة المحاولة',
+        onEmptyAction: _load,
+        child: ListView(
               children: [
                 ...statuses.map((s) {
                   final id = J.i(s['id']);
@@ -1421,6 +1814,7 @@ class _MailSettingsScreenState extends State<MailSettingsScreen> {
                 ),
               ],
             ),
+      ),
     );
   }
 }
@@ -1442,9 +1836,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final bankName = TextEditingController();
   final accountName = TextEditingController();
   final ifsc = TextEditingController();
+  final taxName = TextEditingController();
+  final taxNumber = TextEditingController();
+  final panNumber = TextEditingController();
+  final pincode = TextEditingController();
+  final stateCtrl = TextEditingController();
   String? cityId;
   String? logoPath;
   String? proofPath;
+  String? nationalIdPath;
   List<Map<String, dynamic>> cities = [];
   bool busy = false;
 
@@ -1462,6 +1862,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bankName.text = J.str(s['bank_name']);
     accountName.text = J.str(s['account_name']);
     ifsc.text = J.str(s['bank_ifsc_code'] ?? s['ifsc_code']);
+    taxName.text = J.str(s['tax_name']);
+    taxNumber.text = J.str(s['tax_number']);
+    panNumber.text = J.str(s['pan_number']);
+    pincode.text = J.str(s['pincode_id'] == 0 ? '' : s['pincode_id']);
+    stateCtrl.text = J.str(s['state']);
     cityId = s['city_id']?.toString();
     app.api.cities().then((res) {
       if (mounted) setState(() => cities = res.dataMaps);
@@ -1480,6 +1885,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bankName.dispose();
     accountName.dispose();
     ifsc.dispose();
+    taxName.dispose();
+    taxNumber.dispose();
+    panNumber.dispose();
+    pincode.dispose();
+    stateCtrl.dispose();
     super.dispose();
   }
 
@@ -1511,7 +1921,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const SectionHeader('البيانات البنكية'),
+          const SectionHeader('البيانات البنكية والضريبية (مطابق saveSellerDetails)'),
           BrandedCard(
             child: Column(
               children: [
@@ -1519,6 +1929,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 labeledField(accountName, 'اسم الحساب'),
                 labeledField(accountNumber, 'رقم الحساب'),
                 labeledField(ifsc, 'رمز البنك'),
+                labeledField(taxName, 'الاسم الضريبي'),
+                labeledField(taxNumber, 'الرقم الضريبي'),
+                labeledField(panNumber, 'رقم PAN'),
+                labeledField(pincode, 'الرمز البريدي', type: TextInputType.number),
+                labeledField(stateCtrl, 'المحافظة/الولاية'),
               ],
             ),
           ),
@@ -1547,6 +1962,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 reason: 'سنفتح المعرض لاختيار إثبات العنوان فقط. لا نصل إلى صورك الأخرى.',
               );
               if (file != null && mounted) setState(() => proofPath = file.path);
+            },
+          ),
+          const SizedBox(height: 12),
+          UploadDropZone(
+            label: nationalIdPath == null ? 'البطاقة الوطنية' : 'تم اختيار البطاقة ✓',
+            selected: nationalIdPath != null,
+            subtitle: 'مطلوبة إن لم تكن مرفوعة من قبل',
+            onTap: () async {
+              final file = await pickStoreImage(
+                context,
+                reason: 'سنفتح المعرض لاختيار صورة البطاقة الوطنية فقط. لا نصل إلى صورك الأخرى.',
+              );
+              if (file != null && mounted) setState(() => nationalIdPath = file.path);
             },
           ),
           const SizedBox(height: 20),
@@ -1581,9 +2009,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'bank_name': bankName.text,
                       'account_name': accountName.text,
                       'ifsc_code': ifsc.text,
+                      'tax_name': taxName.text,
+                      'tax_number': taxNumber.text,
+                      'pan_number': panNumber.text,
+                      if (pincode.text.trim().isNotEmpty) 'pincode_id': pincode.text.trim(),
+                      if (stateCtrl.text.trim().isNotEmpty) 'state': stateCtrl.text.trim(),
                     };
                     if (logoPath != null) map['store_logo'] = await MultipartFile.fromFile(logoPath!, filename: 'logo.jpg');
                     if (proofPath != null) map['address_proof'] = await MultipartFile.fromFile(proofPath!, filename: 'proof.jpg');
+                    if (nationalIdPath != null) map['national_id_card'] = await MultipartFile.fromFile(nationalIdPath!, filename: 'national_id.jpg');
                     final result = await app.api.saveSellerDetails(FormData.fromMap(map));
                     if (!mounted) return;
                     setState(() => busy = false);
@@ -1594,6 +2028,415 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: busy ? const BusySpinner() : const Text('حفظ'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ───────── أقسام المتجر (مطابق seller/seller_sections list/save/update/delete) ─────────
+// الباكند: name* + is_always_available + available_from/to (H:i) + row_order + status
+class SellerSectionsScreen extends StatefulWidget {
+  const SellerSectionsScreen({super.key});
+  @override
+  State<SellerSectionsScreen> createState() => _SellerSectionsScreenState();
+}
+
+class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
+  List<Map<String, dynamic>> items = [];
+  bool loading = true;
+  String? error;
+
+  Future<void> _load() async {
+    if (mounted) setState(() { loading = true; error = null; });
+    final r = await app.api.sellerSections(activeOnly: false);
+    if (!mounted) return;
+    setState(() {
+      items = r.dataMaps;
+      loading = false;
+      error = r.ok ? null : r.failMessage;
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _form([Map<String, dynamic>? item]) async {
+    if (!await confirmWrite(context)) return;
+    final name = TextEditingController(text: J.str(item?['name']));
+    final rowOrder = TextEditingController(text: J.str(item?['row_order'], '0'));
+    bool always = item == null ? true : J.i(item['is_always_available'], 1) == 1;
+    String from = J.str(item?['available_from']);
+    String to = J.str(item?['available_to']);
+    int status = J.i(item?['status'], 1);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text(item == null ? 'قسم جديد' : 'تعديل قسم'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم *', border: OutlineInputBorder())),
+                const SizedBox(height: 10),
+                TextField(controller: rowOrder, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الترتيب', border: OutlineInputBorder())),
+                SwitchListTile(title: const Text('متاح طوال الوقت'), value: always, onChanged: (v) => setDlg(() => always = v)),
+                if (!always)
+                  Row(
+                    children: [
+                      Expanded(child: OutlinedButton(onPressed: () async {
+                        final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                        if (t != null) setDlg(() => from = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                      }, child: Text(from.isEmpty ? 'من' : from))),
+                      const SizedBox(width: 8),
+                      Expanded(child: OutlinedButton(onPressed: () async {
+                        final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
+                        if (t != null) setDlg(() => to = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+                      }, child: Text(to.isEmpty ? 'إلى' : to))),
+                    ],
+                  ),
+                SwitchListTile(title: const Text('نشط'), value: status == 1, onChanged: (v) => setDlg(() => status = v ? 1 : 0)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
+          ],
+        ),
+      ),
+    );
+    final n = name.text.trim();
+    name.dispose();
+    rowOrder.dispose();
+    if (ok != true) return;
+    if (n.isEmpty) {
+      if (mounted) toast(context, 'أدخل الاسم');
+      return;
+    }
+    if (!always && (from.isEmpty || to.isEmpty)) {
+      if (mounted) toast(context, 'حدد وقت البداية والنهاية أو اختر متاح طوال الوقت');
+      return;
+    }
+    final body = <String, dynamic>{
+      'name': n,
+      'row_order': int.tryParse(rowOrder.text.trim()) ?? 0,
+      'status': status,
+      'is_always_available': always ? 1 : 0,
+      if (!always) 'available_from': from,
+      if (!always) 'available_to': to,
+      if (item != null) 'id': item['id'],
+    };
+    final r = item == null ? await app.api.saveSellerSection(body) : await app.api.updateSellerSection(body);
+    if (!mounted) return;
+    toast(context, r.ok ? 'تم الحفظ' : r.message);
+    if (r.ok) _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('أقسام المتجر')),
+      floatingActionButton: app.canWrite ? FloatingActionButton(onPressed: () => _form(), child: const Icon(Icons.add)) : null,
+      body: FetchBody(
+        loading: loading,
+        onRefresh: _load,
+        error: error,
+        isEmpty: items.isEmpty,
+        emptyText: 'لا توجد أقسام — أضف قسماً لتنظيم منتجاتك',
+        child: ListView.separated(
+          padding: const EdgeInsets.all(12),
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (_, i) {
+            final it = items[i];
+            final always = J.i(it['is_always_available'], 1) == 1;
+            return ListTile(
+              tileColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: Text(J.str(it['name'])),
+              subtitle: Text(always ? 'متاح طوال الوقت • ترتيب ${J.str(it['row_order'], '0')}' : '${J.str(it['available_from'])} - ${J.str(it['available_to'])}'),
+              trailing: J.i(it['status'], 1) == 1 ? null : const Icon(Icons.visibility_off_outlined),
+              onTap: app.canWrite ? () => _form(it) : null,
+              leading: app.canWrite ? IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async {
+                if (!await confirmWrite(context)) return;
+                final ok = await confirmAction(context, title: 'حذف القسم', body: 'حذف ${J.str(it['name'])}؟ (تُفك منتجاته)', confirmLabel: 'حذف');
+                if (!ok || !context.mounted) return;
+                final r = await app.api.deleteSellerSection(it['id']);
+                if (!context.mounted) return;
+                toast(context, r.ok ? 'تم الحذف' : r.message);
+                if (r.ok) _load();
+              }) : null,
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ───────── الإعدادات: ساعات العمل + تغيير اسم المستخدم وكلمة المرور ─────────
+// Web parity: views/Sellers/SellerSettings.vue
+// GET/POST seller/business_hours + POST system_users/change_password
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool loading = true;
+  bool busyHours = false;
+  bool busyPass = false;
+  String storeName = '';
+  String openingTime = '';
+  String closingTime = '';
+  bool isOpen = true;
+  String? nextOpeningAt;
+  String? nextOpeningDate;
+
+  final username = TextEditingController();
+  final currentPassword = TextEditingController();
+  final newPassword = TextEditingController();
+  final confirmPassword = TextEditingController();
+  bool obscureCurrent = true;
+  bool obscureNew = true;
+  bool obscureConfirm = true;
+
+  @override
+  void initState() {
+    super.initState();
+    username.text = J.str(app.user?['username']);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    username.dispose();
+    currentPassword.dispose();
+    newPassword.dispose();
+    confirmPassword.dispose();
+    super.dispose();
+  }
+
+  static String normTime(String v) {
+    final m = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(v.trim());
+    if (m == null) return '';
+    return '${m.group(1)!.padLeft(2, '0')}:${m.group(2)}';
+  }
+
+  Future<void> _load() async {
+    setState(() => loading = true);
+    final r = await app.api.businessHours();
+    if (!mounted) return;
+    setState(() => loading = false);
+    if (!r.ok) {
+      toast(context, r.message);
+      return;
+    }
+    final d = r.dataMap;
+    setState(() {
+      storeName = J.str(d['store_name']);
+      openingTime = normTime(J.str(d['opening_time']));
+      closingTime = normTime(J.str(d['closing_time']));
+      isOpen = d['is_open'] != false;
+      final n = J.str(d['next_opening_at']);
+      nextOpeningAt = n.isEmpty ? null : n;
+      final nd = J.str(d['next_opening_date']);
+      nextOpeningDate = nd.isEmpty ? null : nd;
+    });
+  }
+
+  Future<TimeOfDay?> _pick(String current) async {
+    TimeOfDay initial = TimeOfDay.now();
+    final m = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(current);
+    if (m != null) {
+      initial = TimeOfDay(hour: int.parse(m.group(1)!) % 24, minute: int.parse(m.group(2)!));
+    }
+    return showTimePicker(context: context, initialTime: initial);
+  }
+
+  static String fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  Future<void> _saveHours() async {
+    if (!await confirmWrite(context)) return;
+    setState(() => busyHours = true);
+    final r = await app.api.saveBusinessHours(openingTime: openingTime, closingTime: closingTime);
+    if (!mounted) return;
+    setState(() => busyHours = false);
+    toast(context, r.ok ? 'تم الحفظ' : r.message);
+    if (r.ok) _load();
+  }
+
+  Future<void> _savePassword() async {
+    if (username.text.trim().isEmpty || currentPassword.text.isEmpty || newPassword.text.isEmpty) {
+      toast(context, 'أكمل جميع الحقول');
+      return;
+    }
+    if (newPassword.text != confirmPassword.text) {
+      toast(context, 'كلمتا المرور غير متطابقتين');
+      return;
+    }
+    if (!await confirmWrite(context)) return;
+    setState(() => busyPass = true);
+    final r = await app.api.changePassword({
+      'username': username.text.trim(),
+      'current_password': currentPassword.text,
+      'password': newPassword.text,
+      'confirm_password': confirmPassword.text,
+    });
+    if (!mounted) return;
+    setState(() => busyPass = false);
+    if (!r.ok) {
+      toast(context, r.message);
+      return;
+    }
+    toast(context, 'تم الحفظ');
+    if (context.mounted) context.go('/');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('الإعدادات')),
+      body: FetchBody(
+        loading: loading,
+        onRefresh: _load,
+        error: null,
+        isEmpty: false,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const SectionHeader('ساعات عمل المتجر'),
+            BrandedCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (storeName.isNotEmpty)
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      children: [
+                        Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isOpen ? Colors.green : Colors.red,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(isOpen ? 'مفتوح الآن' : 'مغلق الآن',
+                              style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        ),
+                        if (!isOpen && nextOpeningAt != null)
+                          Text('$nextOpeningAt${nextOpeningDate != null ? ' ($nextOpeningDate)' : ''}',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final t = await _pick(openingTime);
+                            if (t != null) setState(() => openingTime = fmt(t));
+                          },
+                          icon: const Icon(Icons.access_time),
+                          label: Text(openingTime.isEmpty ? 'وقت الفتح' : 'الفتح: $openingTime'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final t = await _pick(closingTime);
+                            if (t != null) setState(() => closingTime = fmt(t));
+                          },
+                          icon: const Icon(Icons.access_time),
+                          label: Text(closingTime.isEmpty ? 'وقت الإغلاق' : 'الإغلاق: $closingTime'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () => context.push('/profile'),
+                    icon: const Icon(Icons.storefront_outlined, size: 18),
+                    label: const Text('بيانات المتجر / ملفي'),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: busyHours ? null : _saveHours,
+                      child: busyHours ? const BusySpinner() : const Text('حفظ'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const SectionHeader('تغيير اسم المستخدم وكلمة المرور'),
+            BrandedCard(
+              child: Column(
+                children: [
+                  TextField(controller: username, decoration: const InputDecoration(labelText: 'اسم المستخدم', border: OutlineInputBorder())),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: currentPassword,
+                    obscureText: obscureCurrent,
+                    decoration: InputDecoration(
+                      labelText: 'كلمة المرور الحالية',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureCurrent ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => obscureCurrent = !obscureCurrent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: newPassword,
+                    obscureText: obscureNew,
+                    decoration: InputDecoration(
+                      labelText: 'كلمة المرور الجديدة',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => obscureNew = !obscureNew),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: confirmPassword,
+                    obscureText: obscureConfirm,
+                    decoration: InputDecoration(
+                      labelText: 'تأكيد كلمة المرور',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
+                        onPressed: () => setState(() => obscureConfirm = !obscureConfirm),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: busyPass ? null : _savePassword,
+                      child: busyPass ? const BusySpinner() : const Text('حفظ'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

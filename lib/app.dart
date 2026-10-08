@@ -8,26 +8,59 @@ import 'core/theme.dart';
 import 'features/auth_screens.dart';
 import 'features/main_screens.dart';
 import 'features/manage_screens.dart';
+import 'features/seller_parity_screens.dart';
 
 GoRouter buildRouter() {
   return GoRouter(
     initialLocation: app.isLoggedIn ? '/' : '/login',
     refreshListenable: app,
+    // صفحة 404 عربية بدل الشاشة البيضاء
+    errorBuilder: (context, state) => Scaffold(
+      appBar: AppBar(title: const Text('غير موجود')),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off, size: 56, color: Colors.grey),
+            const SizedBox(height: 12),
+            const Text('الصفحة غير موجودة'),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () => context.go('/'),
+              child: const Text('الرئيسية'),
+            ),
+          ],
+        ),
+      ),
+    ),
     redirect: (context, state) {
       final loc = state.matchedLocation;
-      final public = loc == '/login' || loc == '/register' || loc == '/privacy';
+      final public = loc == '/login' || loc == '/register' || loc == '/privacy' || loc == '/terms';
       if (!app.isLoggedIn && !public) return '/login';
-      if (app.isLoggedIn && (loc == '/login' || loc == '/register')) return '/';
+      if (app.isLoggedIn && (loc == '/login' || loc == '/register')) {
+        return app.needsPendingScreen ? '/pending' : '/';
+      }
+      // Web parity (SellerPendingStatus.vue): pending/rejected/no-store stay
+      // on the status screen until approved.
+      // Web parity (CAMPAIGNS_FEATURE_ENABLED=false): hide campaigns everywhere.
+      if (app.isLoggedIn && !app.campaignsEnabled && loc.startsWith('/campaigns')) return '/';
+      if (app.isLoggedIn && app.needsPendingScreen && loc != '/pending') return '/pending';
+      if (app.isLoggedIn && !app.needsPendingScreen && loc == '/pending') return '/';
       return null;
     },
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/pending', builder: (_, __) => const PendingScreen()),
       GoRoute(path: '/privacy', builder: (_, __) => const PrivacyScreen()),
+      GoRoute(path: '/terms', builder: (_, __) => const TermsScreen()),
+      GoRoute(path: '/sections', builder: (_, __) => const SellerSectionsScreen()),
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
       GoRoute(path: '/orders/:id', builder: (_, s) => OrderDetailsScreen(id: s.pathParameters['id']!)),
       GoRoute(path: '/products/create', builder: (_, __) => const ProductEditScreen()),
       GoRoute(path: '/products/edit/:id', builder: (_, s) => ProductEditScreen(id: s.pathParameters['id'])),
+      GoRoute(path: '/products/view/:id', builder: (_, s) => ProductViewScreen(id: s.pathParameters['id']!)),
+      GoRoute(path: '/stock/:type', builder: (_, s) => StockAlertsScreen(type: s.pathParameters['type'] ?? 'low_stock')),
       GoRoute(path: '/accounting', builder: (_, __) => const AccountingScreen()),
       GoRoute(
         path: '/wallet',
@@ -86,21 +119,26 @@ GoRouter buildRouter() {
       ),
       GoRoute(
         path: '/categories',
-        builder: (_, __) => ResourceListScreen(
-          title: 'تصنيفاتي',
-          loader: () => app.api.categories(),
-          itemTitle: (i) => J.str(i['name']),
-          itemSub: (i) => J.str(i['subtitle'] ?? i['slug']),
-        ),
+        builder: (_, __) => const CategoriesScreen(),
       ),
       GoRoute(path: '/units', builder: (_, __) => const NamedCrudScreen(title: 'الوحدات', kind: 'units')),
       GoRoute(path: '/taxes', builder: (_, __) => const NamedCrudScreen(title: 'الضرائب', kind: 'taxes')),
-      GoRoute(path: '/brands', builder: (_, __) => const NamedCrudScreen(title: 'الماركات', kind: 'brands')),
+      // Web parity (views/Sellers/Brands.vue): full CRUD via NamedCrudScreen.
+      GoRoute(
+        path: '/brands',
+        builder: (_, __) => const NamedCrudScreen(title: 'الماركات', kind: 'brands'),
+      ),
       GoRoute(path: '/media', builder: (_, __) => const MediaScreen()),
       GoRoute(path: '/ratings', builder: (_, __) => const RatingsScreen()),
       GoRoute(path: '/bulk', builder: (_, __) => const BulkUploadScreen()),
       GoRoute(path: '/mail', builder: (_, __) => const MailSettingsScreen()),
+      GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+      GoRoute(path: '/campaigns', builder: (_, __) => const CampaignsScreen()),
+      GoRoute(path: '/campaigns/:id', builder: (_, s) => CampaignDetailsScreen(item: {'id': s.pathParameters['id']})),
+      GoRoute(path: '/storefront', builder: (_, __) => const StorefrontScreen()),
+      GoRoute(path: '/seller-orders', builder: (_, __) => const SellerOrdersNewScreen()),
+      GoRoute(path: '/seller-orders/:id', builder: (_, s) => SellerOrderNewDetailsScreen(id: s.pathParameters['id']!)),
       ShellRoute(
         builder: (context, state, child) => SellerShell(location: state.uri.path, child: child),
         routes: [
@@ -165,8 +203,9 @@ class SellerShell extends StatelessWidget {
               ],
             )
           : null,
-      body: child,
-      bottomNavigationBar: Container(
+      body: SafeArea(top: false, child: child),
+      bottomNavigationBar: SafeArea(
+        child: Container(
         decoration: BoxDecoration(
           color: AppColors.white,
           boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -2))],
@@ -190,7 +229,7 @@ class SellerShell extends StatelessWidget {
             NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'حسابي'),
           ],
         ),
-      ),
+      )),
     );
   }
 }
@@ -216,7 +255,7 @@ class SellerApp extends StatelessWidget {
           ],
           routerConfig: router,
           builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child ?? const SizedBox.shrink()),
-          theme: buildSellerTheme(),
+          theme: buildSellerTheme(app.brand),
         );
       },
     );

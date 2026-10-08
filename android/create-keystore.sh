@@ -17,7 +17,7 @@ keytool -genkeypair -v \
   -keyalg RSA -keysize 2048 -validity 10000 \
   -alias upload \
   -storepass "$PASS" -keypass "$PASS" \
-  -dname "CN=Marib Seller, OU=Mobile, O=Marabmall, L=Marib, ST=Marib, C=YE"
+  -dname "CN=Saree Seller, OU=Mobile, O=SareeMarket, L=Marib, ST=Marib, C=YE"
 
 cat > "$PROPS" <<EOF
 storePassword=$PASS

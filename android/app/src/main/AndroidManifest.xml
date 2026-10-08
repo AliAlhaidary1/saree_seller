@@ -4,12 +4,14 @@
     <uses-permission android:name="android.permission.CAMERA" tools:node="remove"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+    <!-- READ_MEDIA_IMAGES/VIDEO مطلوب لاختيار صور المتجر والمنتجات - إفصاح داخل التطبيق -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" tools:node="remove"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
+    <!-- الإشعارات الفورية (FCM) — تصل حتى والتطبيق مغلق -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <application
-        android:label="مجمع مأرب متجر"
+        android:label="سريع ماركت - تاجر"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -30,7 +32,16 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- فتح تفاصيل الطلب عند ضغط إشعار FCM -->
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
         </activity>
+        <!-- قناة إشعارات الطلبات الافتراضية لـ FCM -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="saree_seller_orders"/>
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>

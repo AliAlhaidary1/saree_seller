@@ -1,4 +1,4 @@
-package com.maribmarket.maribmarket_seller
+package com.saree.saree_seller
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -107,6 +107,11 @@ class ApiResult {
   List<Map<String, dynamic>> get dataMaps {
     final value = raw['data'];
     if (value is List) return J.maps(value);
+    // Laravel paginator: {data: {data: [...], total: n}} أو {data: [...]} مباشرة
+    if (value is Map) {
+      final inner = value['data'];
+      if (inner is List) return J.maps(inner);
+    }
     for (final key in [
       'orders',
       'data',
@@ -114,13 +119,33 @@ class ApiResult {
       'get_products',
       'items',
       'salesReports',
+      'sales_reports',
+      'product_sales',
       'invoices',
       'daily',
       'media',
       'transactions',
+      'withdraw_requests',
+      'seller_orders',
+      'campaigns',
+      'templates',
+      'sections',
+      'ratings',
+      'wallet_transactions',
     ]) {
       final nested = dataMap[key];
       if (nested is List) return J.maps(nested);
+      // paginator متداخل: {withdraw_requests: [...]} داخل data.data؟
+      if (value is Map) {
+        final deep = J.map(value[key]);
+        if (deep['data'] is List) return J.maps(deep['data']);
+      }
+    }
+    // fallback: أول قائمة داخل data
+    if (value is Map) {
+      for (final v in value.values) {
+        if (v is List && v.isNotEmpty && v.first is Map) return J.maps(v);
+      }
     }
     return const [];
   }

@@ -6,23 +6,27 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_controller.dart';
+import '../core/brand_config.dart';
 import '../core/json_util.dart';
 import '../core/theme.dart';
+import 'branded_skeleton.dart';
 
 void toast(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 class BusySpinner extends StatelessWidget {
-  const BusySpinner({super.key, this.color = Colors.white});
-  final Color color;
+  const BusySpinner({super.key, this.color, this.brand});
+  final Color? color;
+  final BrandConfig? brand;
 
   @override
   Widget build(BuildContext context) {
+    final c = color ?? (brand ?? app.brand).orange;
     return SizedBox(
       width: 22,
       height: 22,
-      child: CircularProgressIndicator(strokeWidth: 2.4, color: color),
+      child: CircularProgressIndicator(strokeWidth: 2.4, color: c),
     );
   }
 }
@@ -283,6 +287,8 @@ class FetchBody extends StatelessWidget {
     this.emptyIcon = Icons.inbox_outlined,
     this.emptyActionLabel,
     this.onEmptyAction,
+    this.skeleton,
+    this.skeletonCount = 4,
   });
 
   final bool loading;
@@ -294,11 +300,14 @@ class FetchBody extends StatelessWidget {
   final IconData emptyIcon;
   final String? emptyActionLabel;
   final VoidCallback? onEmptyAction;
+  final Widget? skeleton;
+  final int skeletonCount;
 
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator());
+      return skeleton ??
+          BrandedSkeletonList(brand: app.brand, count: skeletonCount);
     }
     if (error != null && error!.isNotEmpty) {
       return Refreshable(
@@ -371,15 +380,17 @@ class KpiMetricCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: iconColor ?? AppColors.navy, size: 22),
               ),
-              const Spacer(),
+              const SizedBox(height: 10),
               Text(
                 value,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 2),
-              Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
               if (subtitle != null)
-                Text(subtitle!, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ],
           ),
         ),
@@ -419,10 +430,10 @@ class SectionHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            child: Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
           ),
           if (action != null && onAction != null)
-            TextButton(onPressed: onAction, child: Text(action!, style: const TextStyle(color: AppColors.orange))),
+            TextButton(onPressed: onAction, child: Text(action!, style: TextStyle(color: AppColors.orange))),
         ],
       ),
     );
@@ -452,7 +463,7 @@ class QuickActionButton extends StatelessWidget {
             children: [
               Icon(icon, color: AppColors.white, size: 20),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(color: AppColors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+              Text(label, style: TextStyle(color: AppColors.white, fontWeight: FontWeight.w600, fontSize: 13)),
             ],
           ),
         ),
@@ -471,7 +482,7 @@ class BrandedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
-      side: const BorderSide(color: AppColors.border),
+      side: BorderSide(color: AppColors.border),
     );
     final content = Padding(padding: padding, child: child);
 
@@ -543,7 +554,7 @@ class UploadDropZone extends StatelessWidget {
               ),
               if (subtitle != null) ...[
                 const SizedBox(height: 4),
-                Text(subtitle!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                Text(subtitle!, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               ],
               const SizedBox(height: 8),
               Text('اسحب وأفلت أو اضغط للاختيار', style: TextStyle(fontSize: 11, color: AppColors.textSecondary.withValues(alpha: 0.8))),
@@ -638,9 +649,10 @@ class DashboardShortcutCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: AppColors.navy, size: 22),
-          const Spacer(),
+          const SizedBox(height: 8),
           if (value != null && value!.isNotEmpty)
-            Text(value!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: Text(value!, maxLines: 1, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+          const SizedBox(height: 4),
           Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
         ],
       ),
@@ -676,7 +688,7 @@ Future<void> showDriverAssignmentSheet(
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(color: AppColors.navy.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
-                      child: const Icon(Icons.delivery_dining, color: AppColors.navy),
+                      child: Icon(Icons.delivery_dining, color: AppColors.navy),
                     ),
                     const SizedBox(width: 12),
                     const Expanded(
@@ -712,7 +724,7 @@ Future<void> showDriverAssignmentSheet(
                                   backgroundColor: AppColors.orange.withValues(alpha: 0.12),
                                   child: Text(
                                     J.str(d['name']).isNotEmpty ? J.str(d['name'])[0] : '?',
-                                    style: const TextStyle(color: AppColors.orange, fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: AppColors.orange, fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -723,12 +735,12 @@ Future<void> showDriverAssignmentSheet(
                                       Text(J.str(d['name']), style: const TextStyle(fontWeight: FontWeight.w600)),
                                       Text(
                                         J.str(d['mobile']).isNotEmpty ? J.str(d['mobile']) : 'موصل متاح',
-                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                       ),
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.chevron_left, color: AppColors.orange),
+                                Icon(Icons.chevron_left, color: AppColors.orange),
                               ],
                             ),
                           );

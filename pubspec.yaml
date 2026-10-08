@@ -1,7 +1,7 @@
-name: maribmarket_seller
-description: تطبيق مجمع مأرب متجر للبائعين.
+name: saree_seller
+description: سريع ماركت - تاجر
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.12.2
@@ -19,13 +19,23 @@ dependencies:
   image_picker: ^1.1.2
   file_picker: ^10.3.3
   url_launcher: ^6.3.2
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.2.1
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/brand/logo.webp
+    - assets/brand/
+flutter_launcher_icons:
+  android: ic_launcher
+  ios: false
+  image_path: assets/brand/saree-market-mark.png
+  adaptive_icon_background: '#0A2540'
+  adaptive_icon_foreground: assets/brand/saree-market-mark.png

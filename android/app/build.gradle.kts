@@ -15,22 +15,29 @@ if (hasReleaseKeystore) {
 }
 
 android {
-    namespace = "com.maribmarket.maribmarket_seller"
+    namespace = "com.saree.saree_seller"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required by flutter_local_notifications (AAR metadata check)
+        isCoreLibraryDesugaringEnabled = true
     }
     defaultConfig {
-        applicationId = "com.maribmarket.maribmarket_seller"
+        applicationId = "com.saree.saree_seller"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
+    }
+
+    dependencies {
+        coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     }
     signingConfigs {
         if (hasReleaseKeystore) {
