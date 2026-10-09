@@ -183,7 +183,7 @@ class SellerShell extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(app.storeName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        const Text('سريع ماركت', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: Colors.white70)),
+                        const Text('سريع مارت', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: Colors.white70)),
                       ],
                     ),
                   ),
@@ -244,7 +244,7 @@ class SellerApp extends StatelessWidget {
       listenable: app,
       builder: (context, _) {
         return MaterialApp.router(
-          title: 'سريع ماركت - تاجر',
+          title: 'سريع مارت - تاجر',
           debugShowCheckedModeBanner: false,
           locale: const Locale('ar'),
           supportedLocales: const [Locale('ar'), Locale('en')],

@@ -74,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'سريع ماركت',
+                    'سريع مارت',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.white),
                   ),
@@ -694,10 +694,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(color: AppColors.white, borderRadius: BorderRadius.circular(16)),
-                    child: Image.asset('assets/brand/logo.webp', height: 38, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Image.asset('assets/brand/saree-market-mark.png', height: 38)),
+                    child: Image.asset('assets/brand/logo.webp', height: 38, fit: BoxFit.contain, errorBuilder: (_, __, ___) => Image.asset('assets/brand/sreamart-mark.png', height: 38)),
                   ),
                   const SizedBox(height: 12),
-                  Text('سريع ماركت', style: TextStyle(color: AppColors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+                  Text('سريع مارت', style: TextStyle(color: AppColors.white, fontSize: 21, fontWeight: FontWeight.w800)),
                   Text('تطبيق تاجر', style: TextStyle(color: AppColors.orange, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 1.1)),
                   const SizedBox(height: 12),
                   _stepIndicator(completedSteps),
@@ -1050,13 +1050,13 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
   bool loading = true;
 
   static const _privacyFallback =
-      'تنطبق سياسة الخصوصية هذه على تطبيق سريع ماركت - تاجر في اليمن. نجمع بيانات الحساب اللازمة لإدارة المتجر: الاسم، اسم المتجر، رقم الجوال، البريد إن وُجد، العنوان والمدينة، التصنيفات، المنتجات، الطلبات، العمولات، المحفظة وطلبات السحب.\n\n'
+      'تنطبق سياسة الخصوصية هذه على تطبيق سريع مارت - تاجر في اليمن. نجمع بيانات الحساب اللازمة لإدارة المتجر: الاسم، اسم المتجر، رقم الجوال، البريد إن وُجد، العنوان والمدينة، التصنيفات، المنتجات، الطلبات، العمولات، المحفظة وطلبات السحب.\n\n'
       'الصور: يمكنك اختيار شعار المتجر وصورة الهوية وإثبات العنوان وصور المنتجات من المعرض عند التسجيل أو التحديث. لا نصل إلى المعرض إلا عند اختيارك ذلك.\n\n'
       'لا نبيع بياناتك لمعلنين. قد تظهر بيانات لازمة لتنفيذ الطلب داخل المنصة (العميل والإدارة والموصل عند التعيين). يمكنك حذف الحساب من: حسابي ثم حذف الحساب.\n\n'
       'الخدمة مخصصة لأصحاب المتاجر البالغين 18 عاماً فأكثر. آخر تحديث: 15 أغسطس 2026.';
 
   static const _termsFallback =
-      'باستخدام تطبيق سريع ماركت - تاجر فإنك توافق على هذه الشروط. التسجيل يخضع لمراجعة الإدارة قبل تفعيل المتجر.\n\n'
+      'باستخدام تطبيق سريع مارت - تاجر فإنك توافق على هذه الشروط. التسجيل يخضع لمراجعة الإدارة قبل تفعيل المتجر.\n\n'
       'أنت مسؤول عن صحة بيانات المنتجات والأسعار والمخزون، وتنفيذ الطلبات أو تعيين موصل عند السماح بذلك، وتحديث حالة الطلب بدقة.\n\n'
       'يُمنع عرض سلع محظورة أو إساءة استخدام بيانات العملاء. يحق للإدارة إيقاف الحساب عند المخالفة. العمولة تُحسب حسب إعدادات المنصة.\n\n'
       'يمكنك حذف حسابك من داخل التطبيق: حسابي ثم حذف الحساب. آخر تحديث: 15 أغسطس 2026.';

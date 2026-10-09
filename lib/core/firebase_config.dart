@@ -1,10 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 
-/// إعدادات Firebase لمشروع saree-market.
+/// إعدادات Firebase لمشروع sreamart.
 ///
 /// لاستقبال الإشعارات والتطبيق **مغلق تماماً** يلزم سطر واحد فقط:
-/// 1) Firebase Console ← مشروع saree-market ← Add app ← Android.
-/// 2) سجّل package name: `com.saree.saree_seller`.
+/// 1) Firebase Console ← مشروع sreamart ← Add app ← Android.
+/// 2) سجّل package name: `com.sreamart.sreamart_seller`.
 /// 3) انسخ قيمة appId التي تظهر بشكل `1:615854672127:android:XXXXXXXX`
 ///    والصقها في [androidAppId] أدناه ثم أعد بناء التطبيق.
 ///
@@ -21,9 +21,9 @@ class FirebaseConfig {
   static const String androidAppId = '';
 
   static const String messagingSenderId = '615854672127';
-  static const String projectId = 'saree-market';
-  static const String storageBucket = 'saree-market.firebasestorage.app';
-  static const String authDomain = 'saree-market.firebaseapp.com';
+  static const String projectId = 'sreamart';
+  static const String storageBucket = 'sreamart.firebasestorage.app';
+  static const String authDomain = 'sreamart.firebaseapp.com';
 
   /// الـ appId الفعّال على أندرويد: الخاص بالأندرويد إن وُجد.
   static String get effectiveAppId =>

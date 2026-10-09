@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <application
-        android:label="سريع ماركت - تاجر"
+        android:label="سريع مارت - تاجر"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -41,7 +41,7 @@
         <!-- قناة إشعارات الطلبات الافتراضية لـ FCM -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="saree_seller_orders"/>
+            android:value="sreamart_seller_orders"/>
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>

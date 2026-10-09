@@ -1,5 +1,5 @@
-name: saree_seller
-description: سريع ماركت - تاجر
+name: sreamart_seller
+description: سريع مارت - تاجر
 publish_to: "none"
 version: 1.0.0+2
 
@@ -36,6 +36,6 @@ flutter:
 flutter_launcher_icons:
   android: ic_launcher
   ios: false
-  image_path: assets/brand/saree-market-mark.png
+  image_path: assets/brand/sreamart-mark.png
   adaptive_icon_background: '#0A2540'
-  adaptive_icon_foreground: assets/brand/saree-market-mark.png
+  adaptive_icon_foreground: assets/brand/sreamart-mark.png

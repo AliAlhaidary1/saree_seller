@@ -49,13 +49,13 @@ Future<void> pushBackgroundHandler(RemoteMessage message) async {
 
 class PushService {
   static const channel = AndroidNotificationChannel(
-    'saree_seller_orders',
+    'sreamart_seller_orders',
     'طلبات المتجر',
     description: 'إشعارات طلبات التاجر الجديدة',
     importance: Importance.max,
   );
 
-  static const _optionsCacheKey = 'saree_seller_firebase_options';
+  static const _optionsCacheKey = 'sreamart_seller_firebase_options';
   static const _tokenKey = 'fcm_token';
 
   static final FlutterLocalNotificationsPlugin local =
@@ -387,7 +387,7 @@ class PushService {
         body,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'saree_seller_orders',
+            'sreamart_seller_orders',
             'طلبات المتجر',
             channelDescription: 'إشعارات طلبات التاجر الجديدة',
             importance: Importance.max,

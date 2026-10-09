@@ -75,7 +75,7 @@ class _BootstrapState extends State<Bootstrap> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'سريع ماركت',
+                  'سريع مارت',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
