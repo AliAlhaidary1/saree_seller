@@ -5,11 +5,7 @@ import 'package:flutter/foundation.dart';
 /// OTP resend classification + gate for the forgot-password flow.
 ///
 /// All Arabic literals are inline on purpose: this app has no i18n.
-enum OtpSendKind {
-  hardLimit,
-  cooldown,
-  error,
-}
+enum OtpSendKind { hardLimit, cooldown, error }
 
 final RegExp _hardReason = RegExp(
   r'rate.?limit|limit.?exceed|hourly|hour.?limit|quota|otp.?(block|banned|suspend)|send.?(block|banned|suspend)',
@@ -117,18 +113,22 @@ int? extractOtpHttpStatus(Map raw) {
   if (err is Map) {
     final m = _asMap(err);
     final direct =
-        pick(m['httpStatus']) ?? pick(m['http_status']) ?? pick(m['statusCode']);
+        pick(m['httpStatus']) ??
+        pick(m['http_status']) ??
+        pick(m['statusCode']);
     if (direct != null) return direct;
     final details = m['details'];
     if (details is Map) {
       final dm = _asMap(details);
-      final fromDetails = pick(dm['httpStatus']) ??
+      final fromDetails =
+          pick(dm['httpStatus']) ??
           pick(dm['http_status']) ??
           pick(dm['statusCode']);
       if (fromDetails != null) return fromDetails;
     }
   }
-  final top = pick(raw['httpStatus']) ??
+  final top =
+      pick(raw['httpStatus']) ??
       pick(raw['http_status']) ??
       pick(raw['statusCode']);
   if (top != null) return top;
@@ -137,10 +137,7 @@ int? extractOtpHttpStatus(Map raw) {
 
 /// retryAfter = first int>0 and ≤600 among the known keys, else digits parsed from message.
 int extractOtpRetryAfter(Map raw, String message) {
-  final candidates = <dynamic>[
-    raw['retry_after'],
-    raw['retryAfter'],
-  ];
+  final candidates = <dynamic>[raw['retry_after'], raw['retryAfter']];
   final data = raw['data'];
   if (data is Map) candidates.add(data['retry_after']);
   final err = raw['error'];
@@ -243,7 +240,7 @@ class OtpResendGate {
   Timer? _backgroundTimer;
   int backgroundTries = 0;
 
-  static const int maxBackgroundTries = 2;
+  static const int maxBackgroundTries = 0;
   static const int minLockSeconds = 60;
 
   bool get canSend => !DateTime.now().isBefore(allowedAt);

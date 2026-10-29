@@ -140,6 +140,12 @@ bool shouldRetryApi({
 }
 
 void logApiFailure(ClassifiedApiError error, {String? path}) {
+  if (error.release) {
+    // Request paths and exception messages can contain credentials or personal
+    // data. Keep release diagnostics to the public code and HTTP status.
+    debugPrint('[backend] code=${error.publicCode} status=${error.httpStatus}');
+    return;
+  }
   debugPrint(
     '[backend] code=${error.code} status=${error.httpStatus} path=$path message=${error.originalMessage}',
   );

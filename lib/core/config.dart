@@ -1,12 +1,13 @@
 class AppConfig {
   static const defaultApiUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://admin.marabmall.cloud',
+    defaultValue: 'https://admin.sreamart.com',
   );
 
   static const apiSubUrl = '/api';
   static const loginType = 3;
   static const countryDialCode = '967';
+  static const appVersion = '1.0.3';
   static const brand = 0xFF0A2540;
   static const accent = 0xFFFF6B00;
 

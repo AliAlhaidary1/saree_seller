@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'app.dart';
 import 'core/app_controller.dart';
 import 'core/push_service.dart';
+import 'widgets/vendor_splash.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,9 @@ class _BootstrapState extends State<Bootstrap> {
 
   Future<void> _boot() async {
     setState(() => error = null);
+    // مدة الأنيميشن المبسط (1400ms) — سريع بدون انتظار زائد
+    final splashMin =
+        Future<void>.delayed(const Duration(milliseconds: 1500));
     try {
       await app.bootstrap();
     } catch (e) {
@@ -43,6 +47,7 @@ class _BootstrapState extends State<Bootstrap> {
       setState(() => error = '$e');
       return;
     }
+    await splashMin;
     if (!mounted) return;
     final r = buildRouter();
     // تصريف ضغطات الإشعارات (حتى بعد فتح التطبيق من مغلق)
@@ -52,64 +57,25 @@ class _BootstrapState extends State<Bootstrap> {
 
   @override
   Widget build(BuildContext context) {
+    // انتقال واحد متلاشي: سبلاش -> تطبيق (بدون قفزة بين واجهتين)
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: child,
+      ),
+      child: _child(),
+    );
+  }
+
+  Widget _child() {
     if (router == null) {
       return MaterialApp(
+        key: const ValueKey('splash'),
         debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF0A2540),
-          body: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.asset(
-                    'assets/brand/logo.webp',
-                    height: 96,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.storefront,
-                      size: 64,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'سريع مارت',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Text(
-                  'تطبيق التاجر',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                const SizedBox(height: 24),
-                if (error == null)
-                  const CircularProgressIndicator(color: Color(0xFFFF6B00))
-                else ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      'تعذر التهيئة: $error',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _boot,
-                    child: const Text('إعادة المحاولة'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
+        home: VendorSplashScreen(error: error, onRetry: _boot),
       );
     }
-    return SellerApp(router: router!);
+    return SellerApp(key: const ValueKey('app'), router: router!);
   }
 }

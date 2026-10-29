@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_controller.dart';
 import '../core/brand_config.dart';
-import '../core/json_util.dart';
+import '../core/formatters.dart';
 import '../core/theme.dart';
 import 'branded_skeleton.dart';
 
@@ -42,6 +43,7 @@ Future<bool> confirmAction(
   required String title,
   String? body,
   String confirmLabel = 'تأكيد',
+  bool destructive = false,
 }) async {
   final ok = await showDialog<bool>(
     context: context,
@@ -54,6 +56,9 @@ Future<bool> confirmAction(
           child: const Text('إلغاء'),
         ),
         FilledButton(
+          style: destructive
+              ? FilledButton.styleFrom(backgroundColor: AppColors.error)
+              : null,
           onPressed: () => Navigator.pop(ctx, true),
           child: Text(confirmLabel),
         ),
@@ -240,6 +245,49 @@ Future<String?> pickDate(
   return '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00';
 }
 
+class NetImage extends StatelessWidget {
+  const NetImage(
+    this.url, {
+    super.key,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.borderRadius = BorderRadius.zero,
+    this.iconSize = 28,
+  });
+
+  final String url;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final BorderRadius borderRadius;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final src = url.trim();
+    Widget placeholder() => Container(
+          width: width,
+          height: height,
+          color: AppColors.greyBg,
+          alignment: Alignment.center,
+          child: Icon(Icons.image_outlined, size: iconSize, color: AppColors.textSecondary),
+        );
+    if (src.isEmpty) return ClipRRect(borderRadius: borderRadius, child: placeholder());
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: CachedNetworkImage(
+        imageUrl: src,
+        width: width,
+        height: height,
+        fit: fit,
+        placeholder: (_, __) => placeholder(),
+        errorWidget: (_, __, ___) => placeholder(),
+      ),
+    );
+  }
+}
+
 class EmptyBox extends StatelessWidget {
   const EmptyBox(
     this.text, {
@@ -364,33 +412,36 @@ class KpiMetricCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: (iconColor ?? AppColors.navy).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: iconColor ?? AppColors.navy, size: 22),
+                child: Icon(icon, color: iconColor ?? AppColors.navy, size: 20),
               ),
-              const SizedBox(height: 10),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              const SizedBox(height: 6),
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
               ),
               const SizedBox(height: 2),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
               if (subtitle != null)
-                Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
             ],
           ),
         ),
@@ -406,11 +457,12 @@ class OrderStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = orderBadgeStyle(status);
+    final label = Fmt.status(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: style.bg, borderRadius: BorderRadius.circular(20)),
       child: Text(
-        status.isNotEmpty ? status : style.label,
+        label.isEmpty ? style.label : label,
         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: style.fg),
       ),
     );
@@ -658,100 +710,4 @@ class DashboardShortcutCard extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<void> showDriverAssignmentSheet(
-  BuildContext context, {
-  required List<Map<String, dynamic>> drivers,
-  required Future<void> Function(Map<String, dynamic> driver) onAssign,
-}) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.white,
-    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-    builder: (ctx) {
-      return DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.55,
-        minChildSize: 0.35,
-        maxChildSize: 0.85,
-        builder: (_, scroll) {
-          return Column(
-            children: [
-              const SizedBox(height: 8),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: AppColors.navy.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(Icons.delivery_dining, color: AppColors.navy),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('تعيين موصل', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text('اختر موصلاً لاستلام الطلب', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: drivers.isEmpty
-                    ? const Center(child: Text('لا يوجد موصلون متاحون', style: TextStyle(color: AppColors.textSecondary)))
-                    : ListView.separated(
-                        controller: scroll,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: drivers.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, i) {
-                          final d = drivers[i];
-                          return BrandedCard(
-                            onTap: () async {
-                              Navigator.pop(ctx);
-                              await onAssign(d);
-                            },
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: AppColors.orange.withValues(alpha: 0.12),
-                                  child: Text(
-                                    J.str(d['name']).isNotEmpty ? J.str(d['name'])[0] : '?',
-                                    style: TextStyle(color: AppColors.orange, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(J.str(d['name']), style: const TextStyle(fontWeight: FontWeight.w600)),
-                                      Text(
-                                        J.str(d['mobile']).isNotEmpty ? J.str(d['mobile']) : 'موصل متاح',
-                                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(Icons.chevron_left, color: AppColors.orange),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          );
-        },
-      );
-    },
-  );
 }

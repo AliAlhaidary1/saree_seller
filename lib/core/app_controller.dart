@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
@@ -9,10 +10,12 @@ import 'brand_service.dart';
 import 'json_util.dart';
 import 'panel_api.dart';
 import 'push_service.dart';
+import 'token_vault.dart';
 
 class AppController extends ChangeNotifier {
   late SharedPreferences _prefs;
   late PanelApi api;
+  late TokenVault _tokenVault;
 
   String apiUrl = AppConfig.defaultApiUrl;
   String? token;
@@ -31,32 +34,60 @@ class AppController extends ChangeNotifier {
   // Web parity (SellerPendingStatus.vue): pending/rejected/no-store accounts
   // stay on the status screen until approved (status == 1).
   bool get needsPendingScreen =>
-      seller.isEmpty || sellerStatus == 0 || sellerStatus == 2;  bool get isDeactivated => sellerStatus == 3;
+      seller.isEmpty || sellerStatus == 0 || sellerStatus == 2;
+  bool get isDeactivated => sellerStatus == 3;
   bool get isRemoved => sellerStatus == 7;
   bool get canWrite => sellerStatus == 1;
   // مطابق للخلفية: CheckSellerStatus + SellerController.getSettings
-  bool get canViewCustomerDetail =>
-      J.flag(seller['customer_privacy'] ?? settings['view_customer_detail'] ?? settings['customer_privacy'] ?? 1);
+  bool get canViewCustomerDetail => J.flag(
+    seller['customer_privacy'] ??
+        settings['view_customer_detail'] ??
+        settings['customer_privacy'] ??
+        1,
+  );
   bool get canViewOrderOtp =>
       J.flag(seller['view_order_otp'] ?? settings['view_order_otp'] ?? 0);
   bool get canAssignDelivery =>
       J.flag(seller['assign_delivery_boy'] ?? settings['assign_delivery_boy']);
   bool get canChangeOrderStatusDelivered => J.flag(
-      seller['change_order_status_delivered'] ?? settings['change_order_status_delivered'] ?? 0);
+    seller['change_order_status_delivered'] ??
+        settings['change_order_status_delivered'] ??
+        0,
+  );
   bool get requireProductsApproval => J.flag(
-      seller['require_products_approval'] ?? settings['require_products_approval'] ?? 0);
+    seller['require_products_approval'] ??
+        settings['require_products_approval'] ??
+        0,
+  );
   bool get isHomeSeller => J.flag(seller['is_home_seller']);
-  // Web parity: CAMPAIGNS_FEATURE_ENABLED=false hides campaigns everywhere.
-  bool get campaignsEnabled => J.flag(settings['campaigns_feature_enabled']);
-  String get effectiveCommission =>
-      J.str(seller['effective_commission'] ?? seller['commission'] ?? settings['seller_commission'] ?? '');
+  String get effectiveCommission => J.str(
+    seller['effective_commission'] ??
+        seller['commission'] ??
+        settings['seller_commission'] ??
+        '',
+  );
   Color get brandColor => brand.navy;
   Color get accentColor => brand.orange;
-  String get storeName =>
-      J.str(seller['store_name'] ?? user?['store_name'] ?? user?['name'], 'متجري');
+  String get storeName => J.str(
+    seller['store_name'] ?? user?['store_name'] ?? user?['name'],
+    'متجري',
+  );
   dynamic get sellerId => seller['id'] ?? user?['seller_id'];
   String get supportPhone => J.str(settings['support_number']);
   String get supportEmail => J.str(settings['support_email']);
+  String get currencySymbol {
+    final symbol = J
+        .str(
+          seller['currency_symbol'] ??
+              seller['currency'] ??
+              settings['currency_symbol'] ??
+              settings['currency'] ??
+              settings['site_currency'] ??
+              settings['default_currency'],
+        )
+        .trim();
+    return symbol.isEmpty ? 'ر.ي' : symbol;
+  }
 
   /// Platform open/closed from admin store settings (informational for sellers).
   bool get platformOpen {
@@ -73,6 +104,7 @@ class AppController extends ChangeNotifier {
       if (h < 0 || h > 23 || m < 0 || m > 59) return -1;
       return h * 60 + m;
     }
+
     final om = toMin(o);
     final cm = toMin(c);
     if (om < 0 || cm < 0) return true;
@@ -81,17 +113,23 @@ class AppController extends ChangeNotifier {
     if (om < cm) return cur >= om && cur < cm;
     return cur >= om || cur < cm;
   }
+
   bool dashboardFailed = false;
 
   Future<void> bootstrap() async {
     _prefs = await SharedPreferences.getInstance();
     // الحفاظ على api_url المحفوظ — لا نعيد الكتابة بالافتراضي (مطابق setApiUrl).
+    _tokenVault = TokenVault(_prefs);
     final savedUrl = _prefs.getString('api_url');
-    apiUrl = (savedUrl != null && savedUrl.trim().isNotEmpty)
+    apiUrl = !kReleaseMode && savedUrl != null && savedUrl.trim().isNotEmpty
         ? savedUrl.trim()
         : AppConfig.defaultApiUrl;
     await _prefs.setString('api_url', apiUrl);
-    token = _prefs.getString('token');
+    try {
+      token = await _tokenVault.read();
+    } catch (_) {
+      token = null;
+    }
     final storedUser = _prefs.getString('user_json');
     if (storedUser != null) {
       try {
@@ -100,7 +138,7 @@ class AppController extends ChangeNotifier {
     }
     api = PanelApi(baseUrl: apiUrl, token: token);
     api.onUnauthorized = () {
-      if (isLoggedIn) logout();
+      if (isLoggedIn) logout(revokeRemote: false);
     };
     try {
       brand = await BrandService().load(apiUrl);
@@ -155,7 +193,14 @@ class AppController extends ChangeNotifier {
     }
     user = result.user.isNotEmpty ? result.user : result.dataMap;
     api.setToken(token);
-    await _prefs.setString('token', token ?? '');
+    try {
+      await _tokenVault.write(token!);
+    } catch (_) {
+      token = null;
+      user = null;
+      api.setToken(null);
+      return 'تعذر حفظ الجلسة بأمان على الجهاز';
+    }
     await _prefs.setString('user_json', jsonEncode(user));
     // الرفع الفوري + عند أي تجدد لاحق — يضمن وصول الإشعارات والتطبيق مغلق.
     PushService.onTokenChanged = _uploadPushToken;
@@ -183,18 +228,24 @@ class AppController extends ChangeNotifier {
     await refreshDashboard();
   }
 
-  Future<void> logout() async {
+  Future<void> logout({bool revokeRemote = true}) async {
+    if (revokeRemote && token != null) {
+      try {
+        await api.logout();
+      } catch (_) {}
+    }
     token = null;
     user = null;
     dashboard = {};
     settings = {};
     api.setToken(null);
-    await _prefs.remove('token');
+    await _tokenVault.clear();
     await _prefs.remove('user_json');
     notifyListeners();
   }
 
   Future<void> setApiUrl(String url) async {
+    if (kReleaseMode) return;
     final value = url.trim();
     apiUrl = value.isEmpty ? AppConfig.defaultApiUrl : value;
     await _prefs.setString('api_url', apiUrl);

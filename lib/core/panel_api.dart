@@ -11,10 +11,7 @@ class PanelApi {
         baseUrl: _normalize(baseUrl),
         connectTimeout: const Duration(seconds: 25),
         receiveTimeout: const Duration(seconds: 40),
-        headers: const {
-          'Accept': 'application/json',
-          'platform': 'android',
-        },
+        headers: const {'Accept': 'application/json', 'platform': 'android'},
         validateStatus: (code) => code != null && code < 600,
       ),
     );
@@ -102,16 +99,30 @@ class PanelApi {
   }
 
   Future<ApiResult> get(String path, [Map<String, dynamic>? query]) {
-    return _guard(() => _dio.get(path, queryParameters: query), path: path, method: 'GET');
+    return _guard(
+      () => _dio.get(path, queryParameters: query),
+      path: path,
+      method: 'GET',
+    );
   }
 
   Future<ApiResult> post(String path, [Map<String, dynamic>? body]) {
-    return _guard(() => _dio.post(path, data: body ?? {}), path: path, method: 'POST');
+    return _guard(
+      () => _dio.post(path, data: body ?? {}),
+      path: path,
+      method: 'POST',
+    );
   }
 
   Future<ApiResult> postForm(String path, FormData data) {
-    return _guard(() => _dio.post(path, data: data), path: path, method: 'POST');
+    return _guard(
+      () => _dio.post(path, data: data),
+      path: path,
+      method: 'POST',
+    );
   }
+
+  Future<ApiResult> logout() => post('logout');
 
   // الباكند (AdminAuth@login) يخزّن fcm_token في UserToken{type: Seller}
   // ليصل إشعار الطلب للجهاز حتى والتطبيق مغلق.
@@ -132,9 +143,9 @@ class PanelApi {
       post('save_fcm_token', {'token': token});
 
   Future<ApiResult> saveSellerFcmToken(String token) => post(
-        'seller/save_fcm_token',
-        {'token': token, 'fcm_token': token, 'platform': 'android'},
-      );
+    'seller/save_fcm_token',
+    {'token': token, 'fcm_token': token, 'platform': 'android'},
+  );
 
   Future<ApiResult> forgotPasswordOtp(String mobile) {
     return post('forget-password-otp', {
@@ -144,12 +155,12 @@ class PanelApi {
     });
   }
 
-  // مطابق OtpApiController: إرسال/تحقق OTP للتسجيل (purpose=register, type=3)
+  // OTP is bound to the seller-registration flow on the server.
   Future<ApiResult> sendRegisterOtp(String mobile) {
     return post('otp/send', {
       'mobile': mobile,
       'country_code': AppConfig.countryDialCode,
-      'purpose': 'register',
+      'purpose': 'seller_register',
       'type': AppConfig.loginType,
     });
   }
@@ -159,6 +170,7 @@ class PanelApi {
       'mobile': mobile,
       'otp': otp,
       'country_code': AppConfig.countryDialCode,
+      'purpose': 'seller_register',
     });
   }
 
@@ -262,6 +274,7 @@ class PanelApi {
     if (r.ok) return r;
     return postForm('products/bulk_upload', data);
   }
+
   Future<ApiResult> productRatings({dynamic productId}) {
     return get('seller/products/ratings_list', {
       'include_hidden': 1,
@@ -288,17 +301,23 @@ class PanelApi {
       postForm('categories/save', data);
   Future<ApiResult> updateCategory(FormData data) =>
       postForm('categories/update', data);
-  Future<ApiResult> deleteCategory(dynamic id) =>
-      _guard(() => _dio.delete('categories/$id'), path: 'categories/$id', method: 'DELETE');
-  Future<ApiResult> sellerSections({bool activeOnly = true}) => get('seller/seller_sections', {
-        if (activeOnly) 'active_only': 1,
-      });
+  Future<ApiResult> deleteCategory(dynamic id) => _guard(
+    () => _dio.delete('categories/$id'),
+    path: 'categories/$id',
+    method: 'DELETE',
+  );
+  Future<ApiResult> sellerSections({bool activeOnly = true}) =>
+      get('seller/seller_sections', {if (activeOnly) 'active_only': 1});
   Future<ApiResult> settings() => get('seller/settings');
   Future<ApiResult> privacyPolicy() => get('seller/privacy_policy');
   Future<ApiResult> saveSellerDetails(FormData data) =>
       postForm('seller/saveSellerDetails', data);
   // مطابق SellerAccountingApiController: period=today|week|month|custom
-  Future<ApiResult> accounting({String startDate = '', String endDate = '', String period = ''}) {
+  Future<ApiResult> accounting({
+    String startDate = '',
+    String endDate = '',
+    String period = '',
+  }) {
     return get('seller/accounting', {
       if (period.isNotEmpty) 'period': period,
       if (startDate.isNotEmpty) 'startDate': startDate,
@@ -307,11 +326,15 @@ class PanelApi {
   }
 
   // مطابق SellerWalletTransactionsApiController: limit/offset/search
-  Future<ApiResult> wallet({int limit = 12, int offset = 0, String search = ''}) => get('seller/seller_wallet_transactions', {
-        'limit': limit,
-        'offset': offset,
-        if (search.isNotEmpty) 'search': search,
-      });
+  Future<ApiResult> wallet({
+    int limit = 12,
+    int offset = 0,
+    String search = '',
+  }) => get('seller/seller_wallet_transactions', {
+    'limit': limit,
+    'offset': offset,
+    if (search.isNotEmpty) 'search': search,
+  });
   Future<ApiResult> withdrawals() => get('seller/withdrawal_requests');
   Future<ApiResult> salesReports({
     required String startDate,
@@ -376,8 +399,7 @@ class PanelApi {
 
   Future<ApiResult> media() => get('media');
   Future<ApiResult> saveMedia(FormData data) => postForm('media/save', data);
-  Future<ApiResult> deleteMedia(dynamic id) =>
-      post('media/delete', {'id': id});
+  Future<ApiResult> deleteMedia(dynamic id) => post('media/delete', {'id': id});
 
   Future<ApiResult> weeklySales() => get('seller/orders/weekly_sales');
   Future<ApiResult> addWithdrawal({
@@ -425,42 +447,59 @@ class PanelApi {
   Future<ApiResult> deleteCategoryDiscount(dynamic id) =>
       post('seller/category_discounts/delete', {'id': id});
 
+  Future<ApiResult> deliveryOffers() => get('seller/delivery_offers');
+  Future<ApiResult> saveDeliveryOffer(Map<String, dynamic> body) =>
+      post('seller/delivery_offers/save', body);
+  Future<ApiResult> updateDeliveryOffer(Map<String, dynamic> body) =>
+      post('seller/delivery_offers/update', body);
+  Future<ApiResult> deleteDeliveryOffer(dynamic id) =>
+      post('seller/delivery_offers/delete', {'id': id});
+
   Future<ApiResult> mailSettings() => get('seller/mail_settings');
   Future<ApiResult> saveMailSettings(Map<String, dynamic> body) =>
       post('seller/mail_settings/save', body);
   Future<ApiResult> businessHours() => get('seller/business_hours');
-  Future<ApiResult> saveBusinessHours({required String openingTime, required String closingTime}) =>
-      post('seller/business_hours', {
-        'opening_time': openingTime,
-        'closing_time': closingTime,
-      });
+  Future<ApiResult> saveBusinessHours({
+    required String openingTime,
+    required String closingTime,
+    String? statusOverride,
+  }) => post('seller/business_hours', {
+    'opening_time': openingTime,
+    'closing_time': closingTime,
+    if (statusOverride != null) 'status_override': statusOverride,
+  });
   Future<ApiResult> changePassword(Map<String, dynamic> body) =>
       post('system_users/change_password', body);
   Future<ApiResult> deleteAccount({
     required String password,
     String confirmation = 'DELETE',
-  }) =>
-      post('seller/delete_seller_account', {
-        'confirmation': confirmation,
-        'password': password,
-      });
+  }) => post('seller/delete_seller_account', {
+    'confirmation': confirmation,
+    'password': password,
+  });
   Future<ApiResult> cities() => get('seller/cities');
   Future<ApiResult> city(dynamic id) => get('seller/city', {'id': id});
   Future<ApiResult> countries() => get('seller/countries');
-  Future<ApiResult> mainCategories({dynamic categoryId, String search = ''}) => get('seller/main_categories', {
+  Future<ApiResult> mainCategories({dynamic categoryId, String search = ''}) =>
+      get('seller/main_categories', {
         if (categoryId != null) 'category_id': categoryId,
         if (search.isNotEmpty) 'search': search,
       });
   Future<ApiResult> categoriesProductCount() =>
       get('seller/categories/product_count');
   // مطابق SellerController@getProducts: type=sold_out|low_stock|packet_products|loose_products
-  Future<ApiResult> productInfo({String type = '', int limit = 20, int offset = 0}) => get('seller/products/product_info', {
-        if (type.isNotEmpty) 'type': type,
-        'limit': limit,
-        'offset': offset,
-      });
+  Future<ApiResult> productInfo({
+    String type = '',
+    int limit = 20,
+    int offset = 0,
+  }) => get('seller/products/product_info', {
+    if (type.isNotEmpty) 'type': type,
+    'limit': limit,
+    'offset': offset,
+  });
   Future<ApiResult> sellerCategoriesPublic() => get('seller/categories');
-  Future<ApiResult> register(FormData data) => postForm('seller/register', data);
+  Future<ApiResult> register(FormData data) =>
+      postForm('seller/register', data);
   Future<ApiResult> checkStoreName(String name) =>
       get('seller/check-store-name', {'store_name': name});
   Future<ApiResult> checkName(String name) =>
@@ -494,33 +533,28 @@ class PanelApi {
     String startDeliveryDate = '',
     String endDeliveryDate = '',
     int page = 1,
-  }) =>
-      get('seller/seller_orders', {
-        if (fulfillmentStatus != null && fulfillmentStatus.isNotEmpty)
-          'fulfillment_status': fulfillmentStatus,
-        if (status != null && status.isNotEmpty) 'status': status,
-        if (deliveryStatus != null && deliveryStatus.isNotEmpty)
-          'delivery_status': deliveryStatus,
-        if (search != null && search.isNotEmpty) 'search': search,
-        if (sort.isNotEmpty) 'sort': sort,
-        if (hasReturn) 'has_return': 1,
-        if (startDate.isNotEmpty) 'startDate': startDate,
-        if (endDate.isNotEmpty) 'endDate': endDate,
-        if (startDeliveryDate.isNotEmpty) 'startDeliveryDate': startDeliveryDate,
-        if (endDeliveryDate.isNotEmpty) 'endDeliveryDate': endDeliveryDate,
-        if (page > 1) 'page': page,
-      });
+  }) => get('seller/seller_orders', {
+    if (fulfillmentStatus != null && fulfillmentStatus.isNotEmpty)
+      'fulfillment_status': fulfillmentStatus,
+    if (status != null && status.isNotEmpty) 'status': status,
+    if (deliveryStatus != null && deliveryStatus.isNotEmpty)
+      'delivery_status': deliveryStatus,
+    if (search != null && search.isNotEmpty) 'search': search,
+    if (sort.isNotEmpty) 'sort': sort,
+    if (hasReturn) 'has_return': 1,
+    if (startDate.isNotEmpty) 'startDate': startDate,
+    if (endDate.isNotEmpty) 'endDate': endDate,
+    if (startDeliveryDate.isNotEmpty) 'startDeliveryDate': startDeliveryDate,
+    if (endDeliveryDate.isNotEmpty) 'endDeliveryDate': endDeliveryDate,
+    if (page > 1) 'page': page,
+  });
   Future<ApiResult> sellerOrderById(dynamic id) =>
       get('seller/seller_orders/$id');
   Future<ApiResult> sellerOrderFulfillment({
     required dynamic id,
     required String status,
-  }) =>
-      post('seller/seller_orders/$id/fulfillment', {'status': status});
-  Future<ApiResult> sellerOrderCancel({
-    required dynamic id,
-    String? reason,
-  }) =>
+  }) => post('seller/seller_orders/$id/fulfillment', {'status': status});
+  Future<ApiResult> sellerOrderCancel({required dynamic id, String? reason}) =>
       post('seller/seller_orders/$id/cancel', {
         if (reason != null) 'reason': reason,
       });
@@ -529,34 +563,55 @@ class PanelApi {
     required dynamic id,
     required dynamic orderItemId,
     String? reason,
-  }) =>
-      post('seller/seller_orders/$id/reject-item', {
-        'order_item_id': orderItemId,
-        if (reason != null && reason.isNotEmpty) 'reason': reason,
-      });
+  }) => post('seller/seller_orders/$id/reject-item', {
+    'order_item_id': orderItemId,
+    if (reason != null && reason.isNotEmpty) 'reason': reason,
+  });
+
+  Future<ApiResult> sellerOrderRejectReturn({
+    required dynamic id,
+    required dynamic orderItemId,
+    required String reason,
+  }) => post('seller/seller_orders/$id/returns/$orderItemId/reject', {
+    'reason': reason.trim(),
+  });
+
+  Future<ApiResult> sellerDeliveryTransition({
+    required dynamic taskId,
+    required String status,
+    num? cashReceived,
+    String? failureReason,
+  }) => post('seller/delivery_tasks/$taskId/status', {
+    'status': status,
+    if (cashReceived != null) 'cash_received': cashReceived,
+    if (failureReason != null && failureReason.trim().isNotEmpty)
+      'failure_reason': failureReason.trim(),
+  });
 
   // --- Accounting exports ---
-  Future<ApiResult> accountingExportExcel(
-          {String startDate = '', String endDate = ''}) =>
-      get('seller/accounting/export_excel', {
-        if (startDate.isNotEmpty) 'startDate': startDate,
-        if (endDate.isNotEmpty) 'endDate': endDate,
-      });
-  Future<ApiResult> accountingExportInvoices(
-          {String startDate = '', String endDate = ''}) =>
-      get('seller/accounting/export_invoices', {
-        if (startDate.isNotEmpty) 'startDate': startDate,
-        if (endDate.isNotEmpty) 'endDate': endDate,
-      });
+  Future<ApiResult> accountingExportExcel({
+    String startDate = '',
+    String endDate = '',
+  }) => get('seller/accounting/export_excel', {
+    if (startDate.isNotEmpty) 'startDate': startDate,
+    if (endDate.isNotEmpty) 'endDate': endDate,
+  });
+  Future<ApiResult> accountingExportInvoices({
+    String startDate = '',
+    String endDate = '',
+  }) => get('seller/accounting/export_invoices', {
+    if (startDate.isNotEmpty) 'startDate': startDate,
+    if (endDate.isNotEmpty) 'endDate': endDate,
+  });
 
   // --- Withdrawals extras ---
   Future<ApiResult> getWithdrawals() => get('seller/withdrawal_requests/get');
   Future<ApiResult> getWithdrawalBalance() =>
       get('seller/withdrawal_requests/get_balance');
-  Future<ApiResult> updateWithdrawal(
-          {required dynamic id, required dynamic status}) =>
-      post('seller/withdrawal_requests/update',
-          {'id': id, 'status': status});
+  Future<ApiResult> updateWithdrawal({
+    required dynamic id,
+    required dynamic status,
+  }) => post('seller/withdrawal_requests/update', {'id': id, 'status': status});
   Future<ApiResult> deleteWithdrawal(dynamic id) =>
       post('seller/withdrawal_requests/delete', {'id': id});
 
@@ -578,32 +633,31 @@ class PanelApi {
   Future<ApiResult> duplicateCampaign(dynamic id) =>
       post('seller/campaigns/duplicate', {'id': id});
   // set_status يقبل نصوص STATUSES فقط (draft/scheduled/active/paused/expired/archived).
-  Future<ApiResult> setCampaignStatus(
-          {required dynamic id, required String status}) =>
-      post('seller/campaigns/set_status', {'id': id, 'status': status});
+  Future<ApiResult> setCampaignStatus({
+    required dynamic id,
+    required String status,
+  }) => post('seller/campaigns/set_status', {'id': id, 'status': status});
   // attach/detach يتطلبان type (من ATTACHMENT_MAP) + id — لا product_id/category_id.
   Future<ApiResult> attachCampaign({
     required dynamic campaignId,
     required String type,
     required dynamic id,
     int? sortOrder,
-  }) =>
-      post('seller/campaigns/attach', {
-        'campaign_id': campaignId,
-        'type': type,
-        'id': id,
-        if (sortOrder != null) 'sort_order': sortOrder,
-      });
+  }) => post('seller/campaigns/attach', {
+    'campaign_id': campaignId,
+    'type': type,
+    'id': id,
+    if (sortOrder != null) 'sort_order': sortOrder,
+  });
   Future<ApiResult> detachCampaign({
     required dynamic campaignId,
     required String type,
     required dynamic id,
-  }) =>
-      post('seller/campaigns/detach', {
-        'campaign_id': campaignId,
-        'type': type,
-        'id': id,
-      });
+  }) => post('seller/campaigns/detach', {
+    'campaign_id': campaignId,
+    'type': type,
+    'id': id,
+  });
 
   // --- Storefront (seller/storefront) ---
   Future<ApiResult> storefrontTemplates() => get('seller/storefront/templates');
@@ -615,10 +669,13 @@ class PanelApi {
   Future<ApiResult> saveStorefrontAppearance(Map<String, dynamic> body) =>
       post('seller/storefront/appearance', {'settings': body});
   // مطابق publishStorefront: is_published + subdomain_enabled
-  Future<ApiResult> publishStorefront({bool isPublished = true, bool? subdomainEnabled}) => post('seller/storefront/publish', {
-        'is_published': isPublished ? 1 : 0,
-        if (subdomainEnabled != null) 'subdomain_enabled': subdomainEnabled ? 1 : 0,
-      });
+  Future<ApiResult> publishStorefront({
+    bool isPublished = true,
+    bool? subdomainEnabled,
+  }) => post('seller/storefront/publish', {
+    'is_published': isPublished ? 1 : 0,
+    if (subdomainEnabled != null) 'subdomain_enabled': subdomainEnabled ? 1 : 0,
+  });
   Future<ApiResult> saveCustomDomain(String domain) =>
       post('seller/storefront/custom-domain', {'custom_domain': domain});
   Future<ApiResult> saveLinkSettings(Map<String, dynamic> body) =>

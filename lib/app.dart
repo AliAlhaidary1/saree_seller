@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/app_controller.dart';
+import 'core/formatters.dart';
 import 'core/json_util.dart';
 import 'core/theme.dart';
 import 'features/auth_screens.dart';
@@ -35,17 +36,21 @@ GoRouter buildRouter() {
     ),
     redirect: (context, state) {
       final loc = state.matchedLocation;
-      final public = loc == '/login' || loc == '/register' || loc == '/privacy' || loc == '/terms';
+      final public =
+          loc == '/login' ||
+          loc == '/register' ||
+          loc == '/privacy' ||
+          loc == '/terms';
       if (!app.isLoggedIn && !public) return '/login';
       if (app.isLoggedIn && (loc == '/login' || loc == '/register')) {
         return app.needsPendingScreen ? '/pending' : '/';
       }
       // Web parity (SellerPendingStatus.vue): pending/rejected/no-store stay
       // on the status screen until approved.
-      // Web parity (CAMPAIGNS_FEATURE_ENABLED=false): hide campaigns everywhere.
-      if (app.isLoggedIn && !app.campaignsEnabled && loc.startsWith('/campaigns')) return '/';
-      if (app.isLoggedIn && app.needsPendingScreen && loc != '/pending') return '/pending';
-      if (app.isLoggedIn && !app.needsPendingScreen && loc == '/pending') return '/';
+      if (app.isLoggedIn && app.needsPendingScreen && loc != '/pending')
+        return '/pending';
+      if (app.isLoggedIn && !app.needsPendingScreen && loc == '/pending')
+        return '/';
       return null;
     },
     routes: [
@@ -54,30 +59,58 @@ GoRouter buildRouter() {
       GoRoute(path: '/pending', builder: (_, __) => const PendingScreen()),
       GoRoute(path: '/privacy', builder: (_, __) => const PrivacyScreen()),
       GoRoute(path: '/terms', builder: (_, __) => const TermsScreen()),
-      GoRoute(path: '/sections', builder: (_, __) => const SellerSectionsScreen()),
-      GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
-      GoRoute(path: '/orders/:id', builder: (_, s) => OrderDetailsScreen(id: s.pathParameters['id']!)),
-      GoRoute(path: '/products/create', builder: (_, __) => const ProductEditScreen()),
-      GoRoute(path: '/products/edit/:id', builder: (_, s) => ProductEditScreen(id: s.pathParameters['id'])),
-      GoRoute(path: '/products/view/:id', builder: (_, s) => ProductViewScreen(id: s.pathParameters['id']!)),
-      GoRoute(path: '/stock/:type', builder: (_, s) => StockAlertsScreen(type: s.pathParameters['type'] ?? 'low_stock')),
-      GoRoute(path: '/accounting', builder: (_, __) => const AccountingScreen()),
       GoRoute(
-        path: '/wallet',
-        builder: (_, __) => SimpleApiList(title: 'المحفظة', loader: () => app.api.wallet()),
+        path: '/sections',
+        builder: (_, __) => const SellerSectionsScreen(),
       ),
-      GoRoute(path: '/withdrawals', builder: (_, __) => const WithdrawalsScreen()),
+      GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
+      GoRoute(
+        path: '/orders/:id',
+        builder: (_, s) => OrderDetailsScreen(id: s.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/products/create',
+        builder: (_, __) => const ProductEditScreen(),
+      ),
+      GoRoute(
+        path: '/products/edit/:id',
+        builder: (_, s) => ProductEditScreen(id: s.pathParameters['id']),
+      ),
+      GoRoute(
+        path: '/products/view/:id',
+        builder: (_, s) => ProductViewScreen(id: s.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/stock/:type',
+        builder: (_, s) =>
+            StockAlertsScreen(type: s.pathParameters['type'] ?? 'low_stock'),
+      ),
+      GoRoute(
+        path: '/accounting',
+        builder: (_, __) => const AccountingScreen(),
+      ),
+      GoRoute(path: '/wallet', builder: (_, __) => const WalletScreen()),
+      GoRoute(
+        path: '/withdrawals',
+        builder: (_, __) => const WithdrawalsScreen(),
+      ),
       GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
-      GoRoute(path: '/returns', builder: (_, __) => const ReturnsScreen()),
       GoRoute(
         path: '/promos',
         builder: (_, __) => ResourceListScreen(
           title: 'أكواد الخصم',
           loader: () => app.api.promoCodes(),
           itemTitle: (i) => J.str(i['promo_code']),
-          itemSub: (i) => '${i['discount']} ${i['discount_type']} • ${i['start_date']} - ${i['end_date']}',
-          openAdd: (ctx) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => const PromoFormScreen())),
-          openEdit: (ctx, i) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => PromoFormScreen(item: i))),
+          itemSub: (i) =>
+              '${i['discount']} ${Fmt.discountType(i['discount_type'])} • ${Fmt.dateRange(i['start_date'], i['end_date'])}',
+          openAdd: (ctx) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => const PromoFormScreen()),
+          ),
+          openEdit: (ctx, i) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => PromoFormScreen(item: i)),
+          ),
           onDelete: (i) => app.api.deletePromo(i['id']),
         ),
       ),
@@ -87,9 +120,15 @@ GoRouter buildRouter() {
           title: 'عروض فلاش',
           loader: () => app.api.flashSales(),
           itemTitle: (i) => J.str(i['title']),
-          itemSub: (i) => '${i['start_at']} - ${i['end_at']}',
-          openAdd: (ctx) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => const FlashFormScreen())),
-          openEdit: (ctx, i) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => FlashFormScreen(item: i))),
+          itemSub: (i) => Fmt.dateRange(i['start_at'], i['end_at']),
+          openAdd: (ctx) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => const FlashFormScreen()),
+          ),
+          openEdit: (ctx, i) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => FlashFormScreen(item: i)),
+          ),
           onDelete: (i) => app.api.deleteFlash(i['id']),
         ),
       ),
@@ -98,10 +137,18 @@ GoRouter buildRouter() {
         builder: (_, __) => ResourceListScreen(
           title: 'اشترِ واحصل',
           loader: () => app.api.bxgyOffers(),
-          itemTitle: (i) => J.str(i['title']).isEmpty ? 'اشتر ${i['buy_qty']} احصل ${i['get_qty']}' : J.str(i['title']),
-          itemSub: (i) => '${i['start_date']} - ${i['end_date']}',
-          openAdd: (ctx) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => const BxgyFormScreen())),
-          openEdit: (ctx, i) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => BxgyFormScreen(item: i))),
+          itemTitle: (i) => J.str(i['title']).isEmpty
+              ? 'اشتر ${i['buy_qty']} احصل ${i['get_qty']}'
+              : J.str(i['title']),
+          itemSub: (i) => Fmt.dateRange(i['start_date'], i['end_date']),
+          openAdd: (ctx) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => const BxgyFormScreen()),
+          ),
+          openEdit: (ctx, i) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => BxgyFormScreen(item: i)),
+          ),
           onDelete: (i) => app.api.deleteBxgy(i['id']),
         ),
       ),
@@ -110,40 +157,73 @@ GoRouter buildRouter() {
         builder: (_, __) => ResourceListScreen(
           title: 'خصم التصنيف',
           loader: () => app.api.categoryDiscounts(),
-          itemTitle: (i) => J.str(i['title'] ?? (i['category'] is Map ? i['category']['name'] : i['category_id'])),
-          itemSub: (i) => '${i['discount']} ${i['discount_type']}',
-          openAdd: (ctx) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => const CategoryDiscountFormScreen())),
-          openEdit: (ctx, i) => Navigator.push<bool>(ctx, MaterialPageRoute(builder: (_) => CategoryDiscountFormScreen(item: i))),
+          itemTitle: (i) => J.str(
+            i['title'] ??
+                (i['category'] is Map
+                    ? i['category']['name']
+                    : i['category_id']),
+          ),
+          itemSub: (i) =>
+              '${i['discount']} ${Fmt.discountType(i['discount_type'])}',
+          openAdd: (ctx) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(
+              builder: (_) => const CategoryDiscountFormScreen(),
+            ),
+          ),
+          openEdit: (ctx, i) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(
+              builder: (_) => CategoryDiscountFormScreen(item: i),
+            ),
+          ),
           onDelete: (i) => app.api.deleteCategoryDiscount(i['id']),
         ),
       ),
       GoRoute(
-        path: '/categories',
-        builder: (_, __) => const CategoriesScreen(),
+        path: '/delivery-offers',
+        builder: (_, __) => ResourceListScreen(
+          title: 'عروض التوصيل المجاني',
+          loader: () => app.api.deliveryOffers(),
+          itemTitle: (i) => J.str(i['title']),
+          itemSub: (i) => '${J.str(i['type'])} • ممول من المتجر',
+          openAdd: (ctx) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => const DeliveryOfferFormScreen()),
+          ),
+          openEdit: (ctx, i) => Navigator.push<bool>(
+            ctx,
+            MaterialPageRoute(builder: (_) => DeliveryOfferFormScreen(item: i)),
+          ),
+          onDelete: (i) => app.api.deleteDeliveryOffer(i['id']),
+        ),
       ),
-      GoRoute(path: '/units', builder: (_, __) => const NamedCrudScreen(title: 'الوحدات', kind: 'units')),
-      GoRoute(path: '/taxes', builder: (_, __) => const NamedCrudScreen(title: 'الضرائب', kind: 'taxes')),
-      // Web parity (views/Sellers/Brands.vue): full CRUD via NamedCrudScreen.
       GoRoute(
-        path: '/brands',
-        builder: (_, __) => const NamedCrudScreen(title: 'الماركات', kind: 'brands'),
+        path: '/units',
+        builder: (_, __) =>
+            const NamedCrudScreen(title: 'الوحدات', kind: 'units'),
       ),
-      GoRoute(path: '/media', builder: (_, __) => const MediaScreen()),
-      GoRoute(path: '/ratings', builder: (_, __) => const RatingsScreen()),
       GoRoute(path: '/bulk', builder: (_, __) => const BulkUploadScreen()),
-      GoRoute(path: '/mail', builder: (_, __) => const MailSettingsScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
-      GoRoute(path: '/campaigns', builder: (_, __) => const CampaignsScreen()),
-      GoRoute(path: '/campaigns/:id', builder: (_, s) => CampaignDetailsScreen(item: {'id': s.pathParameters['id']})),
-      GoRoute(path: '/storefront', builder: (_, __) => const StorefrontScreen()),
-      GoRoute(path: '/seller-orders', builder: (_, __) => const SellerOrdersNewScreen()),
-      GoRoute(path: '/seller-orders/:id', builder: (_, s) => SellerOrderNewDetailsScreen(id: s.pathParameters['id']!)),
+      GoRoute(
+        path: '/seller-orders',
+        builder: (_, __) => const SellerOrdersNewScreen(),
+      ),
+      GoRoute(
+        path: '/seller-orders/:id',
+        builder: (_, s) =>
+            SellerOrderNewDetailsScreen(id: s.pathParameters['id']!),
+      ),
       ShellRoute(
-        builder: (context, state, child) => SellerShell(location: state.uri.path, child: child),
+        builder: (context, state, child) =>
+            SellerShell(location: state.uri.path, child: child),
         routes: [
           GoRoute(path: '/', builder: (_, __) => const DashboardScreen()),
-          GoRoute(path: '/products', builder: (_, __) => const ProductsScreen()),
+          GoRoute(
+            path: '/products',
+            builder: (_, __) => const ProductsScreen(),
+          ),
           GoRoute(path: '/account', builder: (_, __) => const AccountScreen()),
         ],
       ),
@@ -174,7 +254,8 @@ class SellerShell extends StatelessWidget {
                     child: Image.asset(
                       'assets/brand/logo.webp',
                       height: 36,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.storefront),
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.storefront),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -182,8 +263,22 @@ class SellerShell extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(app.storeName, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        const Text('سريع مارت', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w400, color: Colors.white70)),
+                        Text(
+                          app.storeName,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Text(
+                          'سريع MART',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white70,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -194,7 +289,8 @@ class SellerShell extends StatelessWidget {
                   tooltip: 'الطلبات',
                   onPressed: () => context.push('/orders'),
                   icon: Badge(
-                    isLabelVisible: (app.dashboard['pending_order_count'] ?? 0) > 0,
+                    isLabelVisible:
+                        (app.dashboard['pending_order_count'] ?? 0) > 0,
                     label: Text('${app.dashboard['pending_order_count'] ?? 0}'),
                     backgroundColor: AppColors.orange,
                     child: const Icon(Icons.notifications_outlined),
@@ -206,30 +302,49 @@ class SellerShell extends StatelessWidget {
       body: SafeArea(top: false, child: child),
       bottomNavigationBar: SafeArea(
         child: Container(
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -2))],
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: NavigationBar(
+            height: 68,
+            selectedIndex: index,
+            onDestinationSelected: (i) {
+              switch (i) {
+                case 0:
+                  context.go('/');
+                case 1:
+                  context.go('/products');
+                case 2:
+                  context.go('/account');
+              }
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.dashboard_outlined),
+                selectedIcon: Icon(Icons.dashboard),
+                label: 'الرئيسية',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.inventory_2_outlined),
+                selectedIcon: Icon(Icons.inventory_2),
+                label: 'المنتجات',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person),
+                label: 'حسابي',
+              ),
+            ],
+          ),
         ),
-        child: NavigationBar(
-          height: 68,
-          selectedIndex: index,
-          onDestinationSelected: (i) {
-            switch (i) {
-              case 0:
-                context.go('/');
-              case 1:
-                context.go('/products');
-              case 2:
-                context.go('/account');
-            }
-          },
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'الرئيسية'),
-            NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: 'المنتجات'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'حسابي'),
-          ],
-        ),
-      )),
+      ),
     );
   }
 }
@@ -244,17 +359,20 @@ class SellerApp extends StatelessWidget {
       listenable: app,
       builder: (context, _) {
         return MaterialApp.router(
-          title: 'سريع مارت - تاجر',
+          title: 'سريع MART - تاجر',
           debugShowCheckedModeBanner: false,
           locale: const Locale('ar'),
-          supportedLocales: const [Locale('ar'), Locale('en')],
+          supportedLocales: const [Locale('ar')],
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
           routerConfig: router,
-          builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child ?? const SizedBox.shrink()),
+          builder: (context, child) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: child ?? const SizedBox.shrink(),
+          ),
           theme: buildSellerTheme(app.brand),
         );
       },

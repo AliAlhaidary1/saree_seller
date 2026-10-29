@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/brand_config.dart';
 
-/// Navy/orange shimmer skeleton for loading states.
+/// Formal neutral-grey shimmer skeleton for loading states.
 class BrandedSkeleton extends StatefulWidget {
   const BrandedSkeleton({
     super.key,
@@ -42,7 +42,6 @@ class _BrandedSkeletonState extends State<BrandedSkeleton>
 
   @override
   Widget build(BuildContext context) {
-    final b = widget.brand ?? BrandConfig.defaults;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
@@ -54,11 +53,11 @@ class _BrandedSkeletonState extends State<BrandedSkeleton>
             gradient: LinearGradient(
               begin: Alignment(-1 + _controller.value * 2, 0),
               end: Alignment(_controller.value * 2, 0),
-              colors: [
-                b.greyBg,
-                b.orange.withValues(alpha: 0.15),
-                b.navy.withValues(alpha: 0.08),
-                b.greyBg,
+              colors: const [
+                Color(0xFFE9EBEE),
+                Color(0xFFF7F8FA),
+                Color(0xFFF7F8FA),
+                Color(0xFFE9EBEE),
               ],
             ),
           ),

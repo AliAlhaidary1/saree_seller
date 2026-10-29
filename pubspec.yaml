@@ -1,7 +1,7 @@
-name: sreamart_seller
-description: سريع مارت - تاجر
+name: sareemart_seller
+description: سريع MART - تاجر
 publish_to: "none"
-version: 1.0.0+2
+version: 1.0.3+3
 
 environment:
   sdk: ^3.12.2
@@ -15,6 +15,7 @@ dependencies:
   dio: ^5.8.0+1
   go_router: ^15.1.2
   shared_preferences: ^2.5.3
+  flutter_secure_storage: ^9.2.4
   cached_network_image: ^3.4.1
   image_picker: ^1.1.2
   file_picker: ^10.3.3
@@ -36,6 +37,6 @@ flutter:
 flutter_launcher_icons:
   android: ic_launcher
   ios: false
-  image_path: assets/brand/sreamart-mark.png
+  image_path: assets/brand/sareemart-mark.png
   adaptive_icon_background: '#0A2540'
-  adaptive_icon_foreground: assets/brand/sreamart-mark.png
+  adaptive_icon_foreground: assets/brand/sareemart-mark.png

@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/app_controller.dart';
-import '../core/config.dart';
+import '../core/formatters.dart';
 import '../core/json_util.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
@@ -28,7 +28,8 @@ class ResourceListScreen extends StatefulWidget {
   final String Function(Map<String, dynamic>) itemTitle;
   final String Function(Map<String, dynamic>)? itemSub;
   final Future<bool?> Function(BuildContext context)? openAdd;
-  final Future<bool?> Function(BuildContext context, Map<String, dynamic> item)? openEdit;
+  final Future<bool?> Function(BuildContext context, Map<String, dynamic> item)?
+  openEdit;
   final Future<ApiResult> Function(Map<String, dynamic> item)? onDelete;
 
   @override
@@ -80,6 +81,8 @@ class _ResourceListScreenState extends State<ResourceListScreen> {
         onRefresh: reload,
         error: error,
         isEmpty: items.isEmpty,
+        emptyText: 'لا توجد عناصر بعد',
+        emptyIcon: Icons.inbox_outlined,
         child: ListView.separated(
           padding: const EdgeInsets.all(12),
           itemCount: items.length,
@@ -88,9 +91,13 @@ class _ResourceListScreenState extends State<ResourceListScreen> {
             final item = items[i];
             return ListTile(
               tileColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               title: Text(widget.itemTitle(item)),
-              subtitle: widget.itemSub == null ? null : Text(widget.itemSub!(item)),
+              subtitle: widget.itemSub == null
+                  ? null
+                  : Text(widget.itemSub!(item)),
               onTap: widget.openEdit == null
                   ? null
                   : () async {
@@ -108,6 +115,7 @@ class _ResourceListScreenState extends State<ResourceListScreen> {
                           title: 'حذف',
                           body: 'هل تريد حذف هذا العنصر؟',
                           confirmLabel: 'حذف',
+                          destructive: true,
                         );
                         if (!ok || !context.mounted) return;
                         final result = await widget.onDelete!(item);
@@ -119,262 +127,6 @@ class _ResourceListScreenState extends State<ResourceListScreen> {
             );
           },
         ),
-      ),
-    );
-  }
-}
-
-// ───────── التصنيفات (مطابق seller/seller_categories + main_categories + product_count) ─────────
-class CategoriesScreen extends StatefulWidget {
-  const CategoriesScreen({super.key});
-  @override
-  State<CategoriesScreen> createState() => _CategoriesScreenState();
-}
-
-class _CategoriesScreenState extends State<CategoriesScreen> {
-  List<Map<String, dynamic>> mine = [];
-  List<Map<String, dynamic>> main = [];
-  List<Map<String, dynamic>> counts = [];
-  bool loading = true;
-  String? error;
-
-  Future<void> _load() async {
-    if (mounted) setState(() { loading = true; error = null; });
-    final a = await app.api.categories();
-    final b = await app.api.mainCategories();
-    final c = await app.api.categoriesProductCount();
-    if (!mounted) return;
-    setState(() {
-      mine = a.dataMaps;
-      main = b.dataMaps;
-      counts = c.dataMaps;
-      loading = false;
-      error = a.ok ? null : a.failMessage;
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('التصنيفات'),
-          bottom: const TabBar(tabs: [Tab(text: 'تصنيفاتي'), Tab(text: 'الرئيسية'), Tab(text: 'منتجاتي')]),
-        ),
-        floatingActionButton: app.canWrite
-            ? FloatingActionButton(onPressed: () => _form(), child: const Icon(Icons.add))
-            : null,
-        body: FetchBody(
-          loading: loading,
-          onRefresh: _load,
-          error: error,
-          isEmpty: false,
-          child: TabBarView(
-            children: [
-              _mineList(),
-              _list(main, empty: 'لا توجد تصنيفات رئيسية'),
-              counts.isEmpty
-                  ? const EmptyBox('لا توجد إحصائيات بعد', icon: Icons.category_outlined)
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: counts.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) {
-                        final c = counts[i];
-                        return ListTile(
-                          tileColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          title: Text(J.str(c['name'])),
-                          trailing: Text(J.str(c['product_count'], '0'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        );
-                      },
-                    ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _list(List<Map<String, dynamic>> items, {required String empty}) {
-    if (items.isEmpty) return EmptyBox(empty, icon: Icons.category_outlined);
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final c = items[i];
-        return ListTile(
-          tileColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text(J.str(c['name'])),
-          subtitle: Text(J.str(c['subtitle'] ?? c['slug'] ?? '')),
-        );
-      },
-    );
-  }
-
-  Future<void> _form([Map<String, dynamic>? item]) async {
-    final saved = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => CategoryFormScreen(item: item)),
-    );
-    if (saved == true && mounted) _load();
-  }
-
-  Widget _mineList() {
-    if (mine.isEmpty) return const EmptyBox('لا توجد تصنيفات مربوطة بمتجرك', icon: Icons.category_outlined);
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: mine.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final c = mine[i];
-        return ListTile(
-          tileColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text(J.str(c['name'])),
-          subtitle: Text(J.str(c['subtitle'] ?? c['slug'] ?? '')),
-          trailing: app.canWrite
-              ? Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      tooltip: 'تعديل',
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => _form(c),
-                    ),
-                    IconButton(
-                      tooltip: 'حذف',
-                      icon: Icon(Icons.delete_outline, color: AppColors.error),
-                      onPressed: () async {
-                        final ok = await confirmAction(context,
-                            title: 'حذف التصنيف', body: 'حذف ${J.str(c['name'])}؟', confirmLabel: 'حذف');
-                        if (!ok || !context.mounted) return;
-                        final r = await app.api.deleteCategory(c['id']);
-                        if (!context.mounted) return;
-                        toast(context, r.ok ? 'تم الحذف' : r.message);
-                        if (r.ok) _load();
-                      },
-                    ),
-                  ],
-                )
-              : null,
-        );
-      },
-    );
-  }
-}
-
-// ───────── نموذج التصنيف (إضافة/تعديل) ─────────
-// Web parity: views/Category/Edit.vue — FormData {name, slug, subtitle, image, status, parent_id}
-class CategoryFormScreen extends StatefulWidget {
-  const CategoryFormScreen({super.key, this.item});
-  final Map<String, dynamic>? item;
-  @override
-  State<CategoryFormScreen> createState() => _CategoryFormScreenState();
-}
-
-class _CategoryFormScreenState extends State<CategoryFormScreen> {
-  final name = TextEditingController();
-  final subtitle = TextEditingController();
-  int status = 1;
-  String? imagePath;
-  bool busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final it = widget.item;
-    if (it != null) {
-      name.text = J.str(it['name']);
-      subtitle.text = J.str(it['subtitle']);
-      status = J.i(it['status'], 1);
-    }
-  }
-
-  @override
-  void dispose() {
-    name.dispose();
-    subtitle.dispose();
-    super.dispose();
-  }
-
-  static String slugify(String v) => v
-      .trim()
-      .replaceAll(RegExp(r'\s+'), '-')
-      .replaceAll(RegExp(r'[^\w\u0600-\u06FF\-]'), '')
-      .replaceAll(RegExp(r'-+'), '-');
-
-  Future<void> _save() async {
-    if (name.text.trim().isEmpty) {
-      toast(context, 'أدخل اسم التصنيف');
-      return;
-    }
-    if (!await confirmWrite(context)) return;
-    setState(() => busy = true);
-    final map = <String, dynamic>{
-      'name': name.text.trim(),
-      'slug': slugify(name.text),
-      'subtitle': subtitle.text.trim(),
-      'status': status,
-      if (widget.item != null) 'id': widget.item!['id'],
-    };
-    if (imagePath != null) {
-      map['image'] = await MultipartFile.fromFile(imagePath!, filename: 'category.jpg');
-    }
-    final data = FormData.fromMap(map);
-    final r = widget.item == null ? await app.api.saveCategory(data) : await app.api.updateCategory(data);
-    if (!mounted) return;
-    setState(() => busy = false);
-    toast(context, r.ok ? 'تم الحفظ' : r.message);
-    if (r.ok && context.mounted) Navigator.pop(context, true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final it = widget.item;
-    final currentImg = J.str(it?['image'] ?? it?['image_url']);
-    return Scaffold(
-      appBar: AppBar(title: Text(it == null ? 'إضافة تصنيف' : 'تعديل تصنيف')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم *', border: OutlineInputBorder())),
-          const SizedBox(height: 10),
-          TextField(controller: subtitle, decoration: const InputDecoration(labelText: 'الوصف المختصر', border: OutlineInputBorder())),
-          const SizedBox(height: 10),
-          SwitchListTile(title: const Text('نشط'), value: status == 1, onChanged: (v) => setState(() => status = v ? 1 : 0)),
-          const SizedBox(height: 6),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final file = await pickStoreImage(context, reason: 'سنفتح المعرض لاختيار صورة التصنيف فقط.');
-              if (file != null && mounted) setState(() => imagePath = file.path);
-            },
-            icon: const Icon(Icons.image_outlined),
-            label: Text(imagePath != null ? 'تم اختيار الصورة' : 'صورة التصنيف${it == null ? ' *' : ''}'),
-          ),
-          if (imagePath == null && currentImg.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(AppConfig.fileUrl(app.apiUrl, currentImg),
-                    height: 90, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox()),
-              ),
-            ),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: busy ? null : _save, child: busy ? const BusySpinner() : const Text('حفظ')),
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-        ],
       ),
     );
   }
@@ -400,6 +152,7 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
   String end = '';
   String discountType = 'percentage';
   bool repeatUsage = true;
+  int status = 1;
   String scopeType = 'all';
   String? scopeCategoryId;
   List<Map<String, dynamic>> scopeCategories = [];
@@ -425,6 +178,7 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
       end = J.str(item['end_date']);
       discountType = J.str(item['discount_type'], 'percentage');
       repeatUsage = J.flag(item['repeat_usage']);
+      status = J.i(item['status'], 1);
       scopeType = J.str(item['scope_type'], 'all');
       final sc = item['scope_id'];
       if (sc != null && '$sc'.isNotEmpty) scopeCategoryId = '$sc';
@@ -446,121 +200,164 @@ class _PromoFormScreenState extends State<PromoFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item == null ? 'كود خصم جديد' : 'تعديل كود خصم')),
-      body: SafeArea(child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
-        children: [
-          labeledField(code, 'الكود'),
-          labeledField(message, 'الرسالة', maxLines: 2),
-          labeledField(users, 'عدد المستخدمين', type: TextInputType.number),
-          labeledField(minOrder, 'حد أدنى للطلب', type: TextInputType.number),
-          DropdownButtonFormField<String>(
-            initialValue: discountType,
-            items: const [
-              DropdownMenuItem(value: 'percentage', child: Text('نسبة %')),
-              DropdownMenuItem(value: 'amount', child: Text('مبلغ')),
-            ],
-            onChanged: (v) => setState(() => discountType = v ?? 'percentage'),
-            decoration: const InputDecoration(labelText: 'نوع الخصم', border: OutlineInputBorder()),
+      appBar: AppBar(
+        title: Text(widget.item == null ? 'كود خصم جديد' : 'تعديل كود خصم'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          const SizedBox(height: 10),
-          labeledField(discount, 'قيمة الخصم', type: TextInputType.number),
-          labeledField(maxDiscount, 'أقصى خصم', type: TextInputType.number),
-          SwitchListTile(title: const Text('استخدام متكرر'), value: repeatUsage, onChanged: (v) => setState(() => repeatUsage = v)),
-          if (repeatUsage) labeledField(repeats, 'مرات التكرار', type: TextInputType.number),
-          DropdownButtonFormField<String>(
-            initialValue: scopeType,
-            items: const [
-              DropdownMenuItem(value: 'all', child: Text('كل المتجر')),
-              DropdownMenuItem(value: 'category', child: Text('تصنيف محدد')),
-            ],
-            onChanged: (v) => setState(() => scopeType = v ?? 'all'),
-            decoration: const InputDecoration(labelText: 'نطاق الكود (مطابق الباكند)', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          if (scopeType == 'category')
+          children: [
+            labeledField(code, 'الكود'),
+            labeledField(message, 'الرسالة', maxLines: 2),
+            labeledField(users, 'عدد المستخدمين', type: TextInputType.number),
+            labeledField(minOrder, 'حد أدنى للطلب', type: TextInputType.number),
             DropdownButtonFormField<String>(
-              key: ValueKey('promo-scope-${scopeCategories.length}-$scopeCategoryId'),
-              initialValue: dropdownId(scopeCategoryId, scopeCategories),
-              items: scopeCategories.map((c) => DropdownMenuItem(value: '${c['id']}', child: Text(J.str(c['name'])))).toList(),
-              onChanged: (v) => setState(() => scopeCategoryId = v),
-              decoration: const InputDecoration(labelText: 'التصنيف', border: OutlineInputBorder()),
+              initialValue: discountType,
+              items: const [
+                DropdownMenuItem(value: 'percentage', child: Text('نسبة %')),
+                DropdownMenuItem(value: 'amount', child: Text('مبلغ')),
+              ],
+              onChanged: (v) =>
+                  setState(() => discountType = v ?? 'percentage'),
+              decoration: const InputDecoration(
+                labelText: 'نوع الخصم',
+                border: OutlineInputBorder(),
+              ),
             ),
-          if (scopeType == 'category') const SizedBox(height: 10),
-          ListTile(
-            title: Text(start.isEmpty ? 'تاريخ البداية' : start),
-            trailing: const Icon(Icons.event),
-            onTap: () async {
-              final value = await pickDate(context);
-              if (value != null) setState(() => start = value);
-            },
-          ),
-          ListTile(
-            title: Text(end.isEmpty ? 'تاريخ النهاية' : end),
-            trailing: const Icon(Icons.event),
-            onTap: () async {
-              final value = await pickDate(context);
-              if (value != null) setState(() => end = value);
-            },
-          ),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final file = await pickStoreImage(
-                context,
-                reason: 'سنفتح المعرض لاختيار صورة العرض فقط. لا نصل إلى صورك الأخرى.',
-              );
-              if (file != null && mounted) setState(() => imagePath = file.path);
-            },
-            icon: const Icon(Icons.image),
-            label: Text(imagePath == null ? 'صورة (اختياري)' : 'تم اختيار الصورة'),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: busy
-                ? null
-                : () async {
-                    if (!await confirmWrite(context)) return;
-                    if (code.text.trim().isEmpty || discount.text.trim().isEmpty) {
-                      toast(context, 'أكمل الكود وقيمة الخصم');
-                      return;
-                    }
-                    if (start.isEmpty || end.isEmpty) {
-                      toast(context, 'حدد تاريخ البداية والنهاية');
-                      return;
-                    }
-                    setState(() => busy = true);
-                    final map = <String, dynamic>{
-                      'promo_code': code.text,
-                      'message': message.text,
-                      'start_date': start,
-                      'end_date': end,
-                      'no_of_users': users.text,
-                      'minimum_order_amount': minOrder.text,
-                      'discount_type': discountType,
-                      'discount': discount.text,
-                      'max_discount_amount': maxDiscount.text,
-                      'repeat_usage': repeatUsage ? 1 : 0,
-                      'no_of_repeat_usage': repeats.text,
-                      'status': 1,
-                      'scope_type': scopeType,
-                      if (scopeType == 'category' && scopeCategoryId != null) 'scope_id': scopeCategoryId,
-                      if (widget.item != null) 'id': widget.item!['id'],
-                    };
-                    if (imagePath != null) {
-                      map['image'] = await MultipartFile.fromFile(imagePath!, filename: 'promo.jpg');
-                    }
-                    final data = FormData.fromMap(map);
-                    final result = widget.item == null ? await app.api.savePromo(data) : await app.api.updatePromo(data);
-                    if (!mounted) return;
-                    setState(() => busy = false);
-                    toast(context, result.ok ? 'تم الحفظ' : result.message);
-                    if (result.ok) Navigator.pop(context, true);
-                  },
-            child: busy ? const BusySpinner() : const Text('حفظ'),
-          ),
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-        ],
-      )),
+            const SizedBox(height: 10),
+            labeledField(discount, 'قيمة الخصم', type: TextInputType.number),
+            labeledField(maxDiscount, 'أقصى خصم', type: TextInputType.number),
+            SwitchListTile(
+              title: const Text('استخدام متكرر'),
+              value: repeatUsage,
+              onChanged: (v) => setState(() => repeatUsage = v),
+            ),
+            if (repeatUsage)
+              labeledField(repeats, 'مرات التكرار', type: TextInputType.number),
+            DropdownButtonFormField<String>(
+              initialValue: scopeType,
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('كل المتجر')),
+                DropdownMenuItem(value: 'category', child: Text('تصنيف محدد')),
+              ],
+              onChanged: (v) => setState(() => scopeType = v ?? 'all'),
+              decoration: const InputDecoration(
+                labelText: 'نطاق الكود (مطابق الباكند)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (scopeType == 'category')
+              DropdownButtonFormField<String>(
+                key: ValueKey(
+                  'promo-scope-${scopeCategories.length}-$scopeCategoryId',
+                ),
+                initialValue: dropdownId(scopeCategoryId, scopeCategories),
+                items: scopeCategories
+                    .map(
+                      (c) => DropdownMenuItem(
+                        value: '${c['id']}',
+                        child: Text(J.str(c['name'])),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) => setState(() => scopeCategoryId = v),
+                decoration: const InputDecoration(
+                  labelText: 'التصنيف',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            if (scopeType == 'category') const SizedBox(height: 10),
+            ListTile(
+              title: Text(start.isEmpty ? 'تاريخ البداية' : Fmt.date(start)),
+              trailing: const Icon(Icons.event),
+              onTap: () async {
+                final value = await pickDate(context);
+                if (value != null) setState(() => start = value);
+              },
+            ),
+            ListTile(
+              title: Text(end.isEmpty ? 'تاريخ النهاية' : Fmt.date(end)),
+              trailing: const Icon(Icons.event),
+              onTap: () async {
+                final value = await pickDate(context);
+                if (value != null) setState(() => end = value);
+              },
+            ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final file = await pickStoreImage(
+                  context,
+                  reason:
+                      'سنفتح المعرض لاختيار صورة العرض فقط. لا نصل إلى صورك الأخرى.',
+                );
+                if (file != null && mounted)
+                  setState(() => imagePath = file.path);
+              },
+              icon: const Icon(Icons.image),
+              label: Text(
+                imagePath == null ? 'صورة (اختياري)' : 'تم اختيار الصورة',
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (!await confirmWrite(context)) return;
+                      if (code.text.trim().isEmpty ||
+                          discount.text.trim().isEmpty) {
+                        toast(context, 'أكمل الكود وقيمة الخصم');
+                        return;
+                      }
+                      if (start.isEmpty || end.isEmpty) {
+                        toast(context, 'حدد تاريخ البداية والنهاية');
+                        return;
+                      }
+                      setState(() => busy = true);
+                      final map = <String, dynamic>{
+                        'promo_code': code.text,
+                        'message': message.text,
+                        'start_date': start,
+                        'end_date': end,
+                        'no_of_users': users.text,
+                        'minimum_order_amount': minOrder.text,
+                        'discount_type': discountType,
+                        'discount': discount.text,
+                        'max_discount_amount': maxDiscount.text,
+                        'repeat_usage': repeatUsage ? 1 : 0,
+                        'no_of_repeat_usage': repeats.text,
+                        'status': status,
+                        'scope_type': scopeType,
+                        if (scopeType == 'category' && scopeCategoryId != null)
+                          'scope_id': scopeCategoryId,
+                        if (widget.item != null) 'id': widget.item!['id'],
+                      };
+                      if (imagePath != null) {
+                        map['image'] = await MultipartFile.fromFile(
+                          imagePath!,
+                          filename: 'promo.jpg',
+                        );
+                      }
+                      final data = FormData.fromMap(map);
+                      final result = widget.item == null
+                          ? await app.api.savePromo(data)
+                          : await app.api.updatePromo(data);
+                      if (!mounted) return;
+                      setState(() => busy = false);
+                      toast(context, result.ok ? 'تم الحفظ' : result.message);
+                      if (result.ok) Navigator.pop(context, true);
+                    },
+              child: busy ? const BusySpinner() : const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -580,6 +377,7 @@ class _FlashFormScreenState extends State<FlashFormScreen> {
   String start = '';
   String end = '';
   String? productId;
+  int status = 1;
   List<Map<String, dynamic>> products = [];
   bool busy = false;
 
@@ -595,6 +393,7 @@ class _FlashFormScreenState extends State<FlashFormScreen> {
       description.text = J.str(item['description']);
       start = J.str(item['start_at']);
       end = J.str(item['end_at']);
+      status = J.i(item['status'], 1);
       final items = J.maps(item['items']);
       if (items.isNotEmpty) {
         productId = '${items.first['product_id']}';
@@ -606,72 +405,101 @@ class _FlashFormScreenState extends State<FlashFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item == null ? 'عرض فلاش جديد' : 'تعديل عرض فلاش')),
-      body: SafeArea(child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
-        children: [
-          labeledField(title, 'العنوان'),
-          labeledField(description, 'الوصف', maxLines: 3),
-          DropdownButtonFormField<String>(
-            key: ValueKey('flash-${products.length}-$productId'),
-            initialValue: dropdownId(productId, products),
-            items: products.map((p) => DropdownMenuItem(value: '${p['id']}', child: Text(J.str(p['name'])))).toList(),
-            onChanged: (v) => setState(() => productId = v),
-            decoration: const InputDecoration(labelText: 'المنتج', border: OutlineInputBorder()),
+      appBar: AppBar(
+        title: Text(widget.item == null ? 'عرض فلاش جديد' : 'تعديل عرض فلاش'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          const SizedBox(height: 10),
-          labeledField(discount, 'نسبة الخصم %', type: TextInputType.number),
-          ListTile(
-            title: Text(start.isEmpty ? 'يبدأ' : start),
-            onTap: () async {
-              final value = await pickDate(context, withTime: true);
-              if (value != null) setState(() => start = value);
-            },
-          ),
-          ListTile(
-            title: Text(end.isEmpty ? 'ينتهي' : end),
-            onTap: () async {
-              final value = await pickDate(context, withTime: true);
-              if (value != null) setState(() => end = value);
-            },
-          ),
-          FilledButton(
-            onPressed: busy
-                ? null
-                : () async {
-                    if (!await confirmWrite(context)) return;
-                    if (productId == null) {
-                      toast(context, 'اختر منتجاً');
-                      return;
-                    }
-                    if (start.isEmpty || end.isEmpty) {
-                      toast(context, 'حدد وقت البداية والنهاية');
-                      return;
-                    }
-                    setState(() => busy = true);
-                    final items = jsonEncode([
-                      {'product_id': int.tryParse(productId!) ?? productId, 'discount_type': 'percentage', 'discount_value': discount.text, 'status': 1},
-                    ]);
-                    final data = FormData.fromMap({
-                      'title': title.text,
-                      'description': description.text,
-                      'start_at': start,
-                      'end_at': end,
-                      'items': items,
-                      'status': 1,
-                      if (widget.item != null) 'id': widget.item!['id'],
-                    });
-                    final result = widget.item == null ? await app.api.saveFlash(data) : await app.api.updateFlash(data);
-                    if (!mounted) return;
-                    setState(() => busy = false);
-                    toast(context, result.ok ? 'تم الحفظ' : result.message);
-                    if (result.ok) Navigator.pop(context, true);
-                  },
-            child: busy ? const BusySpinner() : const Text('حفظ'),
-          ),
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-        ],
-      )),
+          children: [
+            labeledField(title, 'العنوان'),
+            labeledField(description, 'الوصف', maxLines: 3),
+            DropdownButtonFormField<String>(
+              key: ValueKey('flash-${products.length}-$productId'),
+              initialValue: dropdownId(productId, products),
+              items: products
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: '${p['id']}',
+                      child: Text(J.str(p['name'])),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => productId = v),
+              decoration: const InputDecoration(
+                labelText: 'المنتج',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            labeledField(discount, 'نسبة الخصم %', type: TextInputType.number),
+            ListTile(
+              title: Text(
+                start.isEmpty ? 'يبدأ' : Fmt.date(start, withTime: true),
+              ),
+              onTap: () async {
+                final value = await pickDate(context, withTime: true);
+                if (value != null) setState(() => start = value);
+              },
+            ),
+            ListTile(
+              title: Text(
+                end.isEmpty ? 'ينتهي' : Fmt.date(end, withTime: true),
+              ),
+              onTap: () async {
+                final value = await pickDate(context, withTime: true);
+                if (value != null) setState(() => end = value);
+              },
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (!await confirmWrite(context)) return;
+                      if (productId == null) {
+                        toast(context, 'اختر منتجاً');
+                        return;
+                      }
+                      if (start.isEmpty || end.isEmpty) {
+                        toast(context, 'حدد وقت البداية والنهاية');
+                        return;
+                      }
+                      setState(() => busy = true);
+                      final items = jsonEncode([
+                        {
+                          'product_id': int.tryParse(productId!) ?? productId,
+                          'discount_type': 'percentage',
+                          'discount_value': discount.text,
+                          'status': 1,
+                        },
+                      ]);
+                      final data = FormData.fromMap({
+                        'title': title.text,
+                        'description': description.text,
+                        'start_at': start,
+                        'end_at': end,
+                        'items': items,
+                        'status': status,
+                        if (widget.item != null) 'id': widget.item!['id'],
+                      });
+                      final result = widget.item == null
+                          ? await app.api.saveFlash(data)
+                          : await app.api.updateFlash(data);
+                      if (!mounted) return;
+                      setState(() => busy = false);
+                      toast(context, result.ok ? 'تم الحفظ' : result.message);
+                      if (result.ok) Navigator.pop(context, true);
+                    },
+              child: busy ? const BusySpinner() : const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -688,11 +516,11 @@ class _BxgyFormScreenState extends State<BxgyFormScreen> {
   final title = TextEditingController();
   final buyQty = TextEditingController(text: '1');
   final getQty = TextEditingController(text: '1');
-  final percent = TextEditingController(text: '100');
   String start = '';
   String end = '';
   String? productId;
   String? getProductId;
+  int status = 1;
   List<Map<String, dynamic>> products = [];
   bool busy = false;
 
@@ -707,95 +535,136 @@ class _BxgyFormScreenState extends State<BxgyFormScreen> {
       title.text = J.str(item['title']);
       buyQty.text = J.str(item['buy_qty'], '1');
       getQty.text = J.str(item['get_qty'], '1');
-      percent.text = J.str(item['get_discount_percent'], '100');
+      status = J.i(item['status'], 1);
       start = J.str(item['start_date']);
       end = J.str(item['end_date']);
       productId = '${item['product_id'] ?? ''}';
-      getProductId = item['get_product_id'] == null ? null : '${item['get_product_id']}';
+      getProductId = item['get_product_id'] == null
+          ? null
+          : '${item['get_product_id']}';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item == null ? 'عرض اشترِ واحصل' : 'تعديل العرض')),
-      body: SafeArea(child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
-        children: [
-          labeledField(title, 'العنوان (اختياري)'),
-          DropdownButtonFormField<String>(
-            key: ValueKey('bxgy-buy-${products.length}-$productId'),
-            initialValue: dropdownId(productId, products),
-            items: products.map((p) => DropdownMenuItem(value: '${p['id']}', child: Text(J.str(p['name'])))).toList(),
-            onChanged: (v) => setState(() => productId = v),
-            decoration: const InputDecoration(labelText: 'المنتج المشترى', border: OutlineInputBorder()),
+      appBar: AppBar(
+        title: Text(widget.item == null ? 'عرض اشترِ واحصل' : 'تعديل العرض'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            key: ValueKey('bxgy-get-${products.length}-$getProductId'),
-            initialValue: products.any((p) => '${p['id']}' == getProductId) ? getProductId : '',
-            items: [
-              const DropdownMenuItem(value: '', child: Text('نفس المنتج')),
-              ...products.map((p) => DropdownMenuItem(value: '${p['id']}', child: Text(J.str(p['name'])))),
-            ],
-            onChanged: (v) => setState(() => getProductId = (v == null || v.isEmpty) ? null : v),
-            decoration: const InputDecoration(labelText: 'المنتج المهدى', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          labeledField(buyQty, 'كمية الشراء', type: TextInputType.number),
-          labeledField(getQty, 'كمية الهدية', type: TextInputType.number),
-          labeledField(percent, 'نسبة خصم الهدية %', type: TextInputType.number),
-          ListTile(
-            title: Text(start.isEmpty ? 'تاريخ البداية' : start),
-            onTap: () async {
-              final value = await pickDate(context);
-              if (value != null) setState(() => start = value);
-            },
-          ),
-          ListTile(
-            title: Text(end.isEmpty ? 'تاريخ النهاية' : end),
-            onTap: () async {
-              final value = await pickDate(context);
-              if (value != null) setState(() => end = value);
-            },
-          ),
-          FilledButton(
-            onPressed: busy
-                ? null
-                : () async {
-                    if (!await confirmWrite(context)) return;
-                    if (productId == null || productId!.isEmpty) {
-                      toast(context, 'اختر المنتج المشترى');
-                      return;
-                    }
-                    if (start.isEmpty || end.isEmpty) {
-                      toast(context, 'حدد تاريخ البداية والنهاية');
-                      return;
-                    }
-                    setState(() => busy = true);
-                    final body = {
-                      'title': title.text,
-                      'product_id': productId,
-                      'buy_qty': buyQty.text,
-                      'get_qty': getQty.text,
-                      'get_product_id': getProductId,
-                      'get_discount_percent': percent.text,
-                      'start_date': start,
-                      'end_date': end,
-                      'status': 1,
-                      if (widget.item != null) 'id': widget.item!['id'],
-                    };
-                    final result = widget.item == null ? await app.api.saveBxgy(body) : await app.api.updateBxgy(body);
-                    if (!mounted) return;
-                    setState(() => busy = false);
-                    toast(context, result.ok ? 'تم الحفظ' : result.message);
-                    if (result.ok) Navigator.pop(context, true);
-                  },
-            child: busy ? const BusySpinner() : const Text('حفظ'),
-          ),
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-        ],
-      )),
+          children: [
+            labeledField(title, 'العنوان (اختياري)'),
+            DropdownButtonFormField<String>(
+              key: ValueKey('bxgy-buy-${products.length}-$productId'),
+              initialValue: dropdownId(productId, products),
+              items: products
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: '${p['id']}',
+                      child: Text(J.str(p['name'])),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => productId = v),
+              decoration: const InputDecoration(
+                labelText: 'المنتج المشترى',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              key: ValueKey('bxgy-get-${products.length}-$getProductId'),
+              initialValue: products.any((p) => '${p['id']}' == getProductId)
+                  ? getProductId
+                  : '',
+              items: [
+                const DropdownMenuItem(value: '', child: Text('نفس المنتج')),
+                ...products.map(
+                  (p) => DropdownMenuItem(
+                    value: '${p['id']}',
+                    child: Text(J.str(p['name'])),
+                  ),
+                ),
+              ],
+              onChanged: (v) => setState(
+                () => getProductId = (v == null || v.isEmpty) ? null : v,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'المنتج المهدى',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            labeledField(buyQty, 'كمية الشراء', type: TextInputType.number),
+            labeledField(getQty, 'كمية الهدية', type: TextInputType.number),
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'الهدية مجانية بالكامل (خصم 100%)، ويتحمل التاجر قيمة العرض.',
+                ),
+              ),
+            ),
+            ListTile(
+              title: Text(start.isEmpty ? 'تاريخ البداية' : Fmt.date(start)),
+              onTap: () async {
+                final value = await pickDate(context);
+                if (value != null) setState(() => start = value);
+              },
+            ),
+            ListTile(
+              title: Text(end.isEmpty ? 'تاريخ النهاية' : Fmt.date(end)),
+              onTap: () async {
+                final value = await pickDate(context);
+                if (value != null) setState(() => end = value);
+              },
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (!await confirmWrite(context)) return;
+                      if (productId == null || productId!.isEmpty) {
+                        toast(context, 'اختر المنتج المشترى');
+                        return;
+                      }
+                      if (start.isEmpty || end.isEmpty) {
+                        toast(context, 'حدد تاريخ البداية والنهاية');
+                        return;
+                      }
+                      setState(() => busy = true);
+                      final body = {
+                        'title': title.text,
+                        'product_id': productId,
+                        'buy_qty': buyQty.text,
+                        'get_qty': getQty.text,
+                        'get_product_id': getProductId,
+                        'get_discount_percent': 100,
+                        'start_date': start,
+                        'end_date': end,
+                        'status': status,
+                        if (widget.item != null) 'id': widget.item!['id'],
+                      };
+                      final result = widget.item == null
+                          ? await app.api.saveBxgy(body)
+                          : await app.api.updateBxgy(body);
+                      if (!mounted) return;
+                      setState(() => busy = false);
+                      toast(context, result.ok ? 'تم الحفظ' : result.message);
+                      if (result.ok) Navigator.pop(context, true);
+                    },
+              child: busy ? const BusySpinner() : const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -805,25 +674,28 @@ class CategoryDiscountFormScreen extends StatefulWidget {
   final Map<String, dynamic>? item;
 
   @override
-  State<CategoryDiscountFormScreen> createState() => _CategoryDiscountFormScreenState();
+  State<CategoryDiscountFormScreen> createState() =>
+      _CategoryDiscountFormScreenState();
 }
 
-class _CategoryDiscountFormScreenState extends State<CategoryDiscountFormScreen> {
+class _CategoryDiscountFormScreenState
+    extends State<CategoryDiscountFormScreen> {
   final title = TextEditingController();
   final discount = TextEditingController();
   final maxDiscount = TextEditingController(text: '0');
   String type = 'percentage';
   String start = '';
   String end = '';
-  String? categoryId;
-  List<Map<String, dynamic>> categories = [];
+  int status = 1;
+  String? sectionId;
+  List<Map<String, dynamic>> sections = [];
   bool busy = false;
 
   @override
   void initState() {
     super.initState();
-    app.api.categories().then((res) {
-      if (mounted) setState(() => categories = res.dataMaps);
+    app.api.sellerSections().then((res) {
+      if (mounted) setState(() => sections = res.dataMaps);
     });
     final item = widget.item;
     if (item != null) {
@@ -831,90 +703,297 @@ class _CategoryDiscountFormScreenState extends State<CategoryDiscountFormScreen>
       discount.text = J.str(item['discount']);
       maxDiscount.text = J.str(item['max_discount_amount'], '0');
       type = J.str(item['discount_type'], 'percentage');
+      status = J.i(item['status'], 1);
       start = J.str(item['start_date']);
       end = J.str(item['end_date']);
-      categoryId = '${item['category_id'] ?? ''}';
+      sectionId = '${item['seller_section_id'] ?? item['category_id'] ?? ''}';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item == null ? 'خصم تصنيف' : 'تعديل خصم تصنيف')),
-      body: SafeArea(child: ListView(
-        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
-        children: [
-          labeledField(title, 'العنوان'),
-          DropdownButtonFormField<String>(
-            key: ValueKey('catd-${categories.length}-$categoryId'),
-            initialValue: dropdownId(categoryId, categories),
-            items: categories.map((c) => DropdownMenuItem(value: '${c['id']}', child: Text(J.str(c['name'])))).toList(),
-            onChanged: (v) => setState(() => categoryId = v),
-            decoration: const InputDecoration(labelText: 'التصنيف', border: OutlineInputBorder()),
+      appBar: AppBar(
+        title: Text(widget.item == null ? 'خصم تصنيف' : 'تعديل خصم تصنيف'),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: type,
-            items: const [
-              DropdownMenuItem(value: 'percentage', child: Text('نسبة %')),
-              DropdownMenuItem(value: 'amount', child: Text('مبلغ')),
-            ],
-            onChanged: (v) => setState(() => type = v ?? 'percentage'),
-            decoration: const InputDecoration(labelText: 'نوع الخصم', border: OutlineInputBorder()),
+          children: [
+            labeledField(title, 'العنوان'),
+            DropdownButtonFormField<String>(
+              key: ValueKey('catd-${sections.length}-$sectionId'),
+              initialValue: dropdownId(sectionId, sections),
+              items: sections
+                  .map(
+                    (c) => DropdownMenuItem(
+                      value: '${c['id']}',
+                      child: Text(J.str(c['name'])),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => sectionId = v),
+              decoration: const InputDecoration(
+                labelText: 'قسم المتجر',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: type,
+              items: const [
+                DropdownMenuItem(value: 'percentage', child: Text('نسبة %')),
+                DropdownMenuItem(value: 'amount', child: Text('مبلغ')),
+              ],
+              onChanged: (v) => setState(() => type = v ?? 'percentage'),
+              decoration: const InputDecoration(
+                labelText: 'نوع الخصم',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            labeledField(discount, 'قيمة الخصم', type: TextInputType.number),
+            labeledField(maxDiscount, 'أقصى خصم', type: TextInputType.number),
+            ListTile(
+              title: Text(start.isEmpty ? 'تاريخ البداية' : Fmt.date(start)),
+              onTap: () async {
+                final value = await pickDate(context);
+                if (value != null) setState(() => start = value);
+              },
+            ),
+            ListTile(
+              title: Text(end.isEmpty ? 'تاريخ النهاية' : Fmt.date(end)),
+              onTap: () async {
+                final value = await pickDate(context);
+                if (value != null) setState(() => end = value);
+              },
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (!await confirmWrite(context)) return;
+                      if (sectionId == null ||
+                          sectionId!.isEmpty ||
+                          discount.text.trim().isEmpty) {
+                        toast(context, 'اختر قسم المتجر وأدخل قيمة الخصم');
+                        return;
+                      }
+                      if (start.isEmpty || end.isEmpty) {
+                        toast(context, 'حدد تاريخ البداية والنهاية');
+                        return;
+                      }
+                      setState(() => busy = true);
+                      final body = {
+                        'title': title.text,
+                        'seller_section_id': sectionId,
+                        'discount_type': type,
+                        'discount': discount.text,
+                        'max_discount_amount': maxDiscount.text,
+                        'start_date': start,
+                        'end_date': end,
+                        'status': status,
+                        if (widget.item != null) 'id': widget.item!['id'],
+                      };
+                      final result = widget.item == null
+                          ? await app.api.saveCategoryDiscount(body)
+                          : await app.api.updateCategoryDiscount(body);
+                      if (!mounted) return;
+                      setState(() => busy = false);
+                      toast(context, result.ok ? 'تم الحفظ' : result.message);
+                      if (result.ok) Navigator.pop(context, true);
+                    },
+              child: busy ? const BusySpinner() : const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DeliveryOfferFormScreen extends StatefulWidget {
+  const DeliveryOfferFormScreen({super.key, this.item});
+  final Map<String, dynamic>? item;
+
+  @override
+  State<DeliveryOfferFormScreen> createState() =>
+      _DeliveryOfferFormScreenState();
+}
+
+class _DeliveryOfferFormScreenState extends State<DeliveryOfferFormScreen> {
+  final title = TextEditingController();
+  final minAmount = TextEditingController(text: '0');
+  final freeCount = TextEditingController(text: '1');
+  final nthValue = TextEditingController(text: '2');
+  final maxSubsidy = TextEditingController(text: '0');
+  final message = TextEditingController();
+  String type = 'min_amount';
+  String start = '';
+  String end = '';
+  int status = 1;
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.item;
+    if (item != null) {
+      title.text = J.str(item['title']);
+      type = J.str(item['type'], 'min_amount');
+      start = J.str(item['start_at']);
+      end = J.str(item['end_at']);
+      minAmount.text = J.str(item['min_order_amount'], '0');
+      freeCount.text = J.str(item['free_orders_count'], '1');
+      nthValue.text = J.str(item['nth_value'], '2');
+      maxSubsidy.text = J.str(item['max_subsidy_amount'], '0');
+      message.text = J.str(item['customer_message']);
+      status = J.i(item['status'], 1);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          widget.item == null ? 'عرض توصيل مجاني' : 'تعديل عرض التوصيل',
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            16,
+            16,
+            16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          const SizedBox(height: 10),
-          labeledField(discount, 'قيمة الخصم', type: TextInputType.number),
-          labeledField(maxDiscount, 'أقصى خصم', type: TextInputType.number),
-          ListTile(
-            title: Text(start.isEmpty ? 'تاريخ البداية' : start),
-            onTap: () async {
-              final value = await pickDate(context);
-              if (value != null) setState(() => start = value);
-            },
-          ),
-          ListTile(
-            title: Text(end.isEmpty ? 'تاريخ النهاية' : end),
-            onTap: () async {
-              final value = await pickDate(context);
-              if (value != null) setState(() => end = value);
-            },
-          ),
-          FilledButton(
-            onPressed: busy
-                ? null
-                : () async {
-                    if (!await confirmWrite(context)) return;
-                    if (categoryId == null || categoryId!.isEmpty || discount.text.trim().isEmpty) {
-                      toast(context, 'اختر التصنيف وأدخل قيمة الخصم');
-                      return;
-                    }
-                    if (start.isEmpty || end.isEmpty) {
-                      toast(context, 'حدد تاريخ البداية والنهاية');
-                      return;
-                    }
-                    setState(() => busy = true);
-                    final body = {
-                      'title': title.text,
-                      'category_id': categoryId,
-                      'discount_type': type,
-                      'discount': discount.text,
-                      'max_discount_amount': maxDiscount.text,
-                      'start_date': start,
-                      'end_date': end,
-                      'status': 1,
-                      if (widget.item != null) 'id': widget.item!['id'],
-                    };
-                    final result = widget.item == null ? await app.api.saveCategoryDiscount(body) : await app.api.updateCategoryDiscount(body);
-                    if (!mounted) return;
-                    setState(() => busy = false);
-                    toast(context, result.ok ? 'تم الحفظ' : result.message);
-                    if (result.ok) Navigator.pop(context, true);
-                  },
-            child: busy ? const BusySpinner() : const Text('حفظ'),
-          ),
-          SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-        ],
-      )),
+          children: [
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'هذا العرض ممول من متجرك تلقائياً، وتُخصم تكلفة التوصيل المدعومة من مستحقاتك.',
+                ),
+              ),
+            ),
+            labeledField(title, 'عنوان العرض'),
+            DropdownButtonFormField<String>(
+              initialValue: type,
+              items: const [
+                DropdownMenuItem(
+                  value: 'min_amount',
+                  child: Text('مجاني عند حد أدنى للطلب'),
+                ),
+                DropdownMenuItem(
+                  value: 'new_user',
+                  child: Text('أول عدد من طلبات العميل'),
+                ),
+                DropdownMenuItem(
+                  value: 'nth_order',
+                  child: Text('كل طلب رقم N'),
+                ),
+                DropdownMenuItem(
+                  value: 'schedule',
+                  child: Text('خلال مناسبة / فترة'),
+                ),
+              ],
+              onChanged: (v) => setState(() => type = v ?? 'min_amount'),
+              decoration: const InputDecoration(
+                labelText: 'نوع العرض',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (type == 'min_amount')
+              labeledField(
+                minAmount,
+                'الحد الأدنى للطلب',
+                type: TextInputType.number,
+              ),
+            if (type == 'new_user')
+              labeledField(
+                freeCount,
+                'عدد الطلبات المجانية الأولى',
+                type: TextInputType.number,
+              ),
+            if (type == 'nth_order')
+              labeledField(nthValue, 'كل طلب رقم', type: TextInputType.number),
+            labeledField(
+              maxSubsidy,
+              'أقصى دعم لتكلفة التوصيل (0 = بلا حد)',
+              type: TextInputType.number,
+            ),
+            labeledField(message, 'رسالة للعميل (اختياري)'),
+            ListTile(
+              title: Text(
+                start.isEmpty
+                    ? 'تاريخ البداية (اختياري)'
+                    : Fmt.date(start, withTime: true),
+              ),
+              onTap: () async {
+                final value = await pickDate(context, withTime: true);
+                if (value != null) setState(() => start = value);
+              },
+            ),
+            ListTile(
+              title: Text(
+                end.isEmpty
+                    ? 'تاريخ النهاية (اختياري)'
+                    : Fmt.date(end, withTime: true),
+              ),
+              onTap: () async {
+                final value = await pickDate(context, withTime: true);
+                if (value != null) setState(() => end = value);
+              },
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (!await confirmWrite(context)) return;
+                      if (!mounted) return;
+                      if (title.text.trim().isEmpty) {
+                        toast(context, 'أدخل عنوان العرض');
+                        return;
+                      }
+                      if (type == 'schedule' &&
+                          (start.isEmpty || end.isEmpty)) {
+                        toast(context, 'حدد بداية ونهاية فترة العرض');
+                        return;
+                      }
+                      setState(() => busy = true);
+                      final body = <String, dynamic>{
+                        'title': title.text.trim(),
+                        'type': type,
+                        'start_at': start.isEmpty ? null : start,
+                        'end_at': end.isEmpty ? null : end,
+                        'min_order_amount': minAmount.text,
+                        'free_orders_count': freeCount.text,
+                        'nth_value': nthValue.text,
+                        'max_subsidy_amount': maxSubsidy.text,
+                        'customer_message': message.text.trim(),
+                        'status': status,
+                        if (widget.item != null) 'id': widget.item!['id'],
+                      };
+                      final result = widget.item == null
+                          ? await app.api.saveDeliveryOffer(body)
+                          : await app.api.updateDeliveryOffer(body);
+                      if (!mounted) return;
+                      setState(() => busy = false);
+                      toast(context, result.ok ? 'تم الحفظ' : result.message);
+                      if (result.ok) Navigator.pop(context, true);
+                    },
+              child: busy ? const BusySpinner() : const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -955,8 +1034,12 @@ class _NamedCrudScreenState extends State<NamedCrudScreen> {
 
   Future<void> _edit([Map<String, dynamic>? item]) async {
     if (!await confirmWrite(context)) return;
-    final name = TextEditingController(text: J.str(item?['name'] ?? item?['title']));
-    final extra = TextEditingController(text: J.str(item?['short_code'] ?? item?['percentage']));
+    final name = TextEditingController(
+      text: J.str(item?['name'] ?? item?['title']),
+    );
+    final extra = TextEditingController(
+      text: J.str(item?['short_code'] ?? item?['percentage']),
+    );
     String? imagePath;
     final ok = await showDialog<bool>(
       context: context,
@@ -965,18 +1048,26 @@ class _NamedCrudScreenState extends State<NamedCrudScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: name, decoration: InputDecoration(labelText: widget.kind == 'taxes' ? 'الاسم' : 'الاسم')),
+            TextField(
+              controller: name,
+              decoration: InputDecoration(
+                labelText: widget.kind == 'taxes' ? 'الاسم' : 'الاسم',
+              ),
+            ),
             if (widget.kind != 'brands')
               TextField(
                 controller: extra,
-                decoration: InputDecoration(labelText: widget.kind == 'units' ? 'الرمز' : 'النسبة %'),
+                decoration: InputDecoration(
+                  labelText: widget.kind == 'units' ? 'الرمز' : 'النسبة %',
+                ),
               ),
             if (widget.kind == 'brands')
               TextButton(
                 onPressed: () async {
                   final file = await pickStoreImage(
                     context,
-                    reason: 'سنفتح المعرض لاختيار صورة الماركة فقط. لا نصل إلى صورك الأخرى.',
+                    reason:
+                        'سنفتح المعرض لاختيار صورة الماركة فقط. لا نصل إلى صورك الأخرى.',
                   );
                   if (file != null) imagePath = file.path;
                 },
@@ -985,8 +1076,14 @@ class _NamedCrudScreenState extends State<NamedCrudScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حفظ'),
+          ),
         ],
       ),
     );
@@ -997,16 +1094,39 @@ class _NamedCrudScreenState extends State<NamedCrudScreen> {
     }
     late ApiResult result;
     if (widget.kind == 'units') {
-      final body = {'name': name.text, 'short_code': extra.text, if (item != null) 'id': item['id']};
-      result = item == null ? await app.api.saveUnit(body) : await app.api.updateUnit(body);
+      final body = {
+        'name': name.text,
+        'short_code': extra.text,
+        if (item != null) 'id': item['id'],
+      };
+      result = item == null
+          ? await app.api.saveUnit(body)
+          : await app.api.updateUnit(body);
     } else if (widget.kind == 'taxes') {
-      final body = {'title': name.text, 'percentage': extra.text, 'status': 1, if (item != null) 'id': item['id']};
-      result = item == null ? await app.api.saveTax(body) : await app.api.updateTax(body);
+      final body = {
+        'title': name.text,
+        'percentage': extra.text,
+        'status': 1,
+        if (item != null) 'id': item['id'],
+      };
+      result = item == null
+          ? await app.api.saveTax(body)
+          : await app.api.updateTax(body);
     } else {
-      final map = <String, dynamic>{'name': name.text, 'status': 1, if (item != null) 'id': item['id']};
-      if (imagePath != null) map['image'] = await MultipartFile.fromFile(imagePath!, filename: 'brand.jpg');
+      final map = <String, dynamic>{
+        'name': name.text,
+        'status': 1,
+        if (item != null) 'id': item['id'],
+      };
+      if (imagePath != null)
+        map['image'] = await MultipartFile.fromFile(
+          imagePath!,
+          filename: 'brand.jpg',
+        );
       final data = FormData.fromMap(map);
-      result = item == null ? await app.api.saveBrand(data) : await app.api.updateBrand(data);
+      result = item == null
+          ? await app.api.saveBrand(data)
+          : await app.api.updateBrand(data);
     }
     if (!mounted) return;
     toast(context, result.ok ? 'تم الحفظ' : result.message);
@@ -1017,339 +1137,58 @@ class _NamedCrudScreenState extends State<NamedCrudScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
-      floatingActionButton: app.canWrite ? FloatingActionButton(onPressed: () => _edit(), child: const Icon(Icons.add)) : null,
+      floatingActionButton: app.canWrite
+          ? FloatingActionButton(
+              onPressed: () => _edit(),
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: FetchBody(
         loading: loading,
         onRefresh: _load,
         error: error,
         isEmpty: items.isEmpty,
+        emptyText: 'لا توجد عناصر بعد',
         child: ListView(
-                    children: items
-                        .map(
-                          (item) => ListTile(
-                            title: Text(J.str(item['name'] ?? item['title'])),
-                            subtitle: Text(J.str(item['short_code'] ?? item['percentage'] ?? '')),
-                            onTap: () => _edit(item),
-                            trailing: app.canWrite
-                                ? IconButton(
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: () async {
-                                      if (!await confirmWrite(context)) return;
-                                      final ok = await confirmAction(
-                                        context,
-                                        title: 'حذف',
-                                        body: 'هل تريد حذف هذا العنصر؟',
-                                        confirmLabel: 'حذف',
-                                      );
-                                      if (!ok || !context.mounted) return;
-                                      final result = switch (widget.kind) {
-                                        'units' => await app.api.deleteUnit(item['id']),
-                                        'taxes' => await app.api.deleteTax(item['id']),
-                                        _ => await app.api.deleteBrand(item['id']),
-                                      };
-                                      if (!context.mounted) return;
-                                      toast(context, result.ok ? 'تم الحذف' : result.message);
-                                      if (result.ok) _load();
-                                    },
-                                  )
-                                : null,
-                          ),
-                        )
-                        .toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class MediaScreen extends StatefulWidget {
-  const MediaScreen({super.key});
-  @override
-  State<MediaScreen> createState() => _MediaScreenState();
-}
-
-class _MediaScreenState extends State<MediaScreen> {
-  List<Map<String, dynamic>> items = [];
-  bool loading = true;
-  String? error;
-  final selected = <dynamic>{};
-
-  Future<void> _load() async {
-    final result = await app.api.media();
-    if (!mounted) return;
-    setState(() {
-      items = result.dataMaps;
-      selected.clear();
-      loading = false;
-      error = result.ok ? null : result.failMessage;
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(selected.isEmpty ? 'الميديا' : 'محدد (${selected.length})'),
-        actions: [
-          if (selected.isNotEmpty && app.canWrite)
-            IconButton(
-              tooltip: 'حذف المحدد',
-              icon: const Icon(Icons.delete_sweep_outlined),
-              onPressed: () async {
-                final ok = await confirmAction(context,
-                    title: 'حذف جماعي', body: 'حذف ${selected.length} ملفات؟', confirmLabel: 'حذف');
-                if (!ok || !context.mounted) return;
-                final r = await app.api.deleteMediaBulk(selected.toList());
-                if (!context.mounted) return;
-                toast(context, r.ok ? 'تم الحذف الجماعي' : r.message);
-                if (r.ok) {
-                  setState(() => selected.clear());
-                  _load();
-                }
-              },
-            ),
-        ],
-      ),
-      floatingActionButton: null,
-      body: FetchBody(
-        loading: loading,
-        onRefresh: _load,
-        error: error,
-        isEmpty: items.isEmpty,
-        emptyText: 'لا توجد ملفات',
-        child: Column(
-          children: [
-            if (app.canWrite)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: UploadDropZone(
-                  label: 'رفع صور جديدة',
-                  subtitle: 'PNG, JPG — اختر عدة صور',
-                  onTap: () async {
-                    if (!await confirmWrite(context)) return;
-                    final picked = await pickStoreFiles(
-                      context,
-                      reason: 'سنفتح منتقي الملفات لرفع صور المنتجات فقط. لا نصل إلى ملفاتك الأخرى.',
-                      multiple: true,
-                    );
-                    if (picked == null || picked.files.isEmpty) return;
-                    final files = <MultipartFile>[];
-                    for (final file in picked.files) {
-                      if (file.path != null) files.add(await MultipartFile.fromFile(file.path!, filename: file.name));
-                    }
-                    final result = await app.api.saveMedia(FormData.fromMap({'files[]': files, 'files': files}));
-                    if (!context.mounted) return;
-                    toast(context, result.ok ? 'تم الرفع' : result.message);
-                    if (result.ok) _load();
-                  },
-                ),
-              ),
-            Expanded(
-              child: LayoutBuilder(builder: (ctx, c) {
-                final cols = c.maxWidth > 900 ? 5 : c.maxWidth > 600 ? 4 : 3;
-                return GridView.builder(
-                    padding: const EdgeInsets.all(12),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (_, i) {
-                      final item = items[i];
-                      final url = AppConfig.fileUrl(
-                        app.apiUrl,
-                        '${item['sub_directory'] ?? ''}${item['name'] ?? item['image'] ?? ''}',
-                      );
-                      final sel = selected.contains(item['id']);
-                      return InkWell(
-                        onLongPress: app.canWrite
-                            ? () => setState(() {
-                                  sel ? selected.remove(item['id']) : selected.add(item['id']);
-                                })
-                            : null,
-                        onTap: app.canWrite && selected.isNotEmpty
-                            ? () => setState(() {
-                                  sel ? selected.remove(item['id']) : selected.add(item['id']);
-                                })
-                            : null,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.network(
-                                url,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    ColoredBox(color: AppColors.greyBg, child: Icon(Icons.image, color: AppColors.textSecondary)),
-                              ),
-                              if (sel)
-                                Container(
-                                  color: AppColors.navy.withValues(alpha: 0.45),
-                                  child: const Icon(Icons.check_circle, color: Colors.white, size: 32),
-                                ),
-                              if (app.canWrite && !sel)
-                                Align(
-                                  alignment: Alignment.topLeft,
-                                  child: Container(
-                                    margin: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.navy.withValues(alpha: 0.7),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: IconButton(
-                                      iconSize: 20,
-                                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                                      padding: const EdgeInsets.all(6),
-                                      icon: Icon(Icons.delete, color: AppColors.white, size: 18),
-                                      onPressed: () async {
-                                        final ok = await confirmAction(
-                                          context,
-                                          title: 'حذف الملف',
-                                          body: 'هل تريد حذف هذا الملف؟',
-                                          confirmLabel: 'حذف',
-                                        );
-                                        if (!ok || !context.mounted) return;
-                                        final result = await app.api.deleteMedia(item['id']);
-                                        if (!context.mounted) return;
-                                        toast(context, result.ok ? 'تم الحذف' : result.message);
-                                        if (result.ok) _load();
-                                      },
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                );
-              }),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class RatingsScreen extends StatefulWidget {
-  const RatingsScreen({super.key});
-  @override
-  State<RatingsScreen> createState() => _RatingsScreenState();
-}
-
-class _RatingsScreenState extends State<RatingsScreen> {
-  List<Map<String, dynamic>> products = [];
-  List<Map<String, dynamic>> ratings = [];
-  String? productId;
-  bool loading = true;
-  String? error;
-
-  Future<void> _load() async {
-    final list = await app.api.products();
-    products = list.dataMaps;
-    productId ??= products.isNotEmpty ? '${products.first['id']}' : null;
-    if (productId != null) {
-      final res = await app.api.productRatings(productId: productId);
-      ratings = res.dataMaps;
-    }
-    if (!mounted) return;
-    setState(() {
-      loading = false;
-      error = list.ok ? null : list.failMessage;
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('تقييمات المنتجات')),
-      body: FetchBody(
-        loading: loading,
-        onRefresh: _load,
-        error: error,
-        isEmpty: products.isEmpty,
-        emptyText: 'لا توجد منتجات لعرض تقييماتها',
-        child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('rating-${products.length}-$productId'),
-                    initialValue: dropdownId(productId, products),
-                    items: products.map((p) => DropdownMenuItem(value: '${p['id']}', child: Text(J.str(p['name'])))).toList(),
-                    onChanged: (v) async {
-                      productId = v;
-                      final res = await app.api.productRatings(productId: productId);
-                      if (mounted) setState(() => ratings = res.dataMaps);
-                    },
-                    decoration: const InputDecoration(labelText: 'المنتج', border: OutlineInputBorder()),
+          children: items
+              .map(
+                (item) => ListTile(
+                  title: Text(J.str(item['name'] ?? item['title'])),
+                  subtitle: Text(
+                    J.str(item['short_code'] ?? item['percentage'] ?? ''),
                   ),
-                ),
-                Expanded(
-                  child: ratings.isEmpty
-                      ? const EmptyBox('لا توجد تقييمات لهذا المنتج')
-                      : ListView(
-                    children: ratings
-                        .map(
-                          (r) => ListTile(
-                            title: Text('${J.str(r['user'] is Map ? r['user']['name'] : r['user_name'])} • ${r['rate'] ?? r['rating']}'),
-                            subtitle: Text(J.str(r['review'] ?? r['comment'])),
-                            trailing: app.canWrite
-                                ? Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        tooltip: J.flag(r['status'])
-                                            ? 'إخفاء'
-                                            : 'إظهار',
-                                        icon: Icon(J.flag(r['status']) ? Icons.visibility : Icons.visibility_off),
-                                        onPressed: () async {
-                                          await app.api.updateRatingStatus(id: r['id'], status: J.flag(r['status']) ? 0 : 1);
-                                          final res = await app.api.productRatings(productId: productId);
-                                          if (mounted) setState(() => ratings = res.dataMaps);
-                                        },
-                                      ),
-                                      IconButton(
-                                        tooltip: 'حذف',
-                                        icon: Icon(Icons.delete_outline, color: AppColors.error),
-                                        onPressed: () async {
-                                          final ok = await confirmAction(context,
-                                              title: 'حذف التقييم', body: 'حذف هذا التقييم نهائياً؟', confirmLabel: 'حذف');
-                                          if (!ok || !context.mounted) return;
-                                          final res = await app.api.deleteRating(r['id']);
-                                          if (!context.mounted) return;
-                                          toast(context, res.ok ? 'تم الحذف' : res.message);
-                                          if (res.ok) {
-                                            final list = await app.api.productRatings(productId: productId);
-                                            if (mounted) setState(() => ratings = list.dataMaps);
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  )
-                                : null,
-                          ),
+                  onTap: () => _edit(item),
+                  trailing: app.canWrite
+                      ? IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () async {
+                            if (!await confirmWrite(context)) return;
+                            final ok = await confirmAction(
+                              context,
+                              title: 'حذف',
+                              body: 'هل تريد حذف هذا العنصر؟',
+                              confirmLabel: 'حذف',
+                              destructive: true,
+                            );
+                            if (!ok || !context.mounted) return;
+                            final result = switch (widget.kind) {
+                              'units' => await app.api.deleteUnit(item['id']),
+                              'taxes' => await app.api.deleteTax(item['id']),
+                              _ => await app.api.deleteBrand(item['id']),
+                            };
+                            if (!context.mounted) return;
+                            toast(
+                              context,
+                              result.ok ? 'تم الحذف' : result.message,
+                            );
+                            if (result.ok) _load();
+                          },
                         )
-                        .toList(),
-                  ),
+                      : null,
                 ),
-              ],
-            ),
+              )
+              .toList(),
+        ),
       ),
     );
   }
@@ -1373,77 +1212,108 @@ class _BulkUploadScreenState extends State<BulkUploadScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('رفع منتجات جماعي')),
       body: SafeArea(
-        child: LayoutBuilder(builder: (ctx, c) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewInsets.bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: c.maxHeight - 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('اختر ملف Excel أو CSV. الأعمدة: اسم المنتج + السعر (إجباري)، الوصف، المخزون، سعر الخصم، القسم، الصورة.',
-                    style: TextStyle(fontSize: 13)),
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final picked = await pickStoreFiles(
-                      context,
-                      reason: 'سنفتح منتقي الملفات لاختيار ملف المنتجات فقط.',
-                      type: FileType.custom,
-                      extensions: const ['csv', 'txt', 'xlsx', 'xls'],
-                    );
-                    if (picked?.files.single.path != null && mounted) {
-                      setState(() {
-                        path = picked!.files.single.path;
-                        fileName = picked.files.single.name;
-                        resultText = null;
-                      });
-                    }
-                  },
-                  icon: const Icon(Icons.attach_file),
-                  label: Text(path == null ? 'اختيار ملف (CSV / Excel)' : 'تم: $fileName'),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: busy || path == null
-                      ? null
-                      : () async {
-                          if (!await confirmWrite(context)) return;
-                          setState(() {
-                            busy = true;
-                            resultText = null;
-                          });
-                          final result = await app.api.bulkUpload(FormData.fromMap({
-                            'file': await MultipartFile.fromFile(path!, filename: fileName ?? 'products.csv'),
-                          }));
-                          if (!mounted) return;
-                          setState(() {
-                            busy = false;
-                            resultOk = result.ok;
-                            // الباكند يرجع عدد المنشأة + أول 5 أخطاء صفوف داخل الرسالة
-                            resultText = result.ok ? result.message : result.message;
-                          });
-                          toast(context, result.ok ? 'اكتمل الاستيراد' : result.message);
-                        },
-                  child: busy ? const BusySpinner() : const Text('رفع'),
-                ),
-                if (resultText != null) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: resultOk ? Colors.green.withValues(alpha: 0.08) : Colors.red.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                          color: resultOk ? Colors.green.withValues(alpha: 0.3) : Colors.red.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(resultText!, style: const TextStyle(fontSize: 13)),
+        child: LayoutBuilder(
+          builder: (ctx, c) => SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: c.maxHeight - 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'اختر ملف Excel أو CSV. الأعمدة: اسم المنتج + السعر (إجباري)، الوصف، المخزون، سعر الخصم، القسم، الصورة.',
+                    style: TextStyle(fontSize: 13),
                   ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await pickStoreFiles(
+                        context,
+                        reason: 'سنفتح منتقي الملفات لاختيار ملف المنتجات فقط.',
+                        type: FileType.custom,
+                        extensions: const ['csv', 'txt', 'xlsx', 'xls'],
+                      );
+                      if (picked?.files.single.path != null && mounted) {
+                        setState(() {
+                          path = picked!.files.single.path;
+                          fileName = picked.files.single.name;
+                          resultText = null;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.attach_file),
+                    label: Text(
+                      path == null
+                          ? 'اختيار ملف (CSV / Excel)'
+                          : 'تم: $fileName',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: busy || path == null
+                        ? null
+                        : () async {
+                            if (!await confirmWrite(context)) return;
+                            setState(() {
+                              busy = true;
+                              resultText = null;
+                            });
+                            final result = await app.api.bulkUpload(
+                              FormData.fromMap({
+                                'file': await MultipartFile.fromFile(
+                                  path!,
+                                  filename: fileName ?? 'products.csv',
+                                ),
+                              }),
+                            );
+                            if (!mounted) return;
+                            setState(() {
+                              busy = false;
+                              resultOk = result.ok;
+                              // الباكند يرجع عدد المنشأة + أول 5 أخطاء صفوف داخل الرسالة
+                              resultText = result.ok
+                                  ? result.message
+                                  : result.message;
+                            });
+                            toast(
+                              context,
+                              result.ok ? 'اكتمل الاستيراد' : result.message,
+                            );
+                          },
+                    child: busy ? const BusySpinner() : const Text('رفع'),
+                  ),
+                  if (resultText != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: resultOk
+                            ? Colors.green.withValues(alpha: 0.08)
+                            : Colors.red.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: resultOk
+                              ? Colors.green.withValues(alpha: 0.3)
+                              : Colors.red.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        resultText!,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
-        )),
+        ),
       ),
     );
   }
@@ -1490,48 +1360,118 @@ class _AccountingScreenState extends State<AccountingScreen> {
         error: error,
         isEmpty: false,
         child: ListView(
-              padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _chip('مبيعات', summary['gross_sales']),
-                    _chip('عمولة', summary['commission_amount']),
-                    _chip('صافي', summary['net_earnings']),
-                    _chip('المحفظة', summary['wallet_balance']),
-                    _chip('طلبات', summary['orders_count']),
-                    _chip('فواتير', summary['invoices_count']),
-                  ],
-                ),
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  OutlinedButton.icon(onPressed: () async { final r = await app.api.accountingExportExcel(); if (!context.mounted) return; toast(context, r.ok ? 'تم تصدير الإكسل (خلفية)' : r.message); }, icon: const Icon(Icons.table_chart, size: 18), label: const Text('تصدير إكسل')),
-                  OutlinedButton.icon(onPressed: () async { final r = await app.api.accountingExportInvoices(); if (!context.mounted) return; toast(context, r.ok ? 'تم تصدير الفواتير (خلفية)' : r.message); }, icon: const Icon(Icons.receipt_long, size: 18), label: const Text('تصدير الفواتير')),
-                  OutlinedButton.icon(onPressed: () async { final r = await app.api.sellerCommission(); if (!context.mounted) return; toast(context, r.ok ? 'العمولة: ${r.dataMap['commission'] ?? r.dataMap}' : r.message); }, icon: const Icon(Icons.percent, size: 18), label: const Text('العمولة')),
-                ]),
-                const SizedBox(height: 12),
-                if (app.isHomeSeller) BrandedCard(child: Text('متجر منزلي — عمولة خاصة: تُحسب عبر home_commission', style: TextStyle(fontSize: 13, color: AppColors.textSecondary))),
-                if (app.requireProductsApproval) BrandedCard(child: Text('تنبيه: المنتجات تتطلب موافقة الإدارة (require_products_approval)', style: TextStyle(fontSize: 13, color: AppColors.orange))),
-                const SizedBox(height: 16),
-                const Text('يومياً', style: TextStyle(fontWeight: FontWeight.bold)),
-                if (daily.isEmpty) const ListTile(title: Text('لا توجد بيانات يومية')),
-                ...daily.map((d) => ListTile(title: Text(J.str(d['date'])), trailing: Text(J.str(d['net_earnings'])))),
-                const Divider(),
-                const Text('الفواتير', style: TextStyle(fontWeight: FontWeight.bold)),
-                if (invoices.isEmpty) const ListTile(title: Text('لا توجد فواتير')),
-                ...invoices.map((inv) => ListTile(
-                      title: Text('#${inv['order_id'] ?? inv['id']}'),
-                      subtitle: Text(J.str(inv['created_at'] ?? inv['date'])),
-                      trailing: Text(J.str(inv['total'] ?? inv['net_amount'] ?? inv['final_total'])),
-                    )),
+                _chip('مبيعات', summary['gross_sales']),
+                _chip('عمولة', summary['commission_amount']),
+                _chip('صافي', summary['net_earnings']),
+                _chip('المحفظة', summary['wallet_balance']),
+                _chip('طلبات', summary['orders_count'], money: false),
+                _chip('فواتير', summary['invoices_count'], money: false),
               ],
             ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final r = await app.api.accountingExportExcel();
+                    if (!context.mounted) return;
+                    toast(
+                      context,
+                      r.ok ? 'تم تصدير الإكسل (خلفية)' : r.message,
+                    );
+                  },
+                  icon: const Icon(Icons.table_chart, size: 18),
+                  label: const Text('تصدير إكسل'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final r = await app.api.accountingExportInvoices();
+                    if (!context.mounted) return;
+                    toast(
+                      context,
+                      r.ok ? 'تم تصدير الفواتير (خلفية)' : r.message,
+                    );
+                  },
+                  icon: const Icon(Icons.receipt_long, size: 18),
+                  label: const Text('تصدير الفواتير'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final r = await app.api.sellerCommission();
+                    if (!context.mounted) return;
+                    toast(
+                      context,
+                      r.ok
+                          ? 'العمولة: ${r.dataMap['commission'] ?? r.dataMap}'
+                          : r.message,
+                    );
+                  },
+                  icon: const Icon(Icons.percent, size: 18),
+                  label: const Text('العمولة'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (app.isHomeSeller)
+              const BrandedCard(
+                child: Text(
+                  'متجر منزلي — تُحسب العمولة حسب سياسة المنصة',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            if (app.requireProductsApproval)
+              BrandedCard(
+                child: Text(
+                  'تنبيه: منتجاتك تحتاج موافقة الإدارة قبل النشر',
+                  style: TextStyle(fontSize: 13, color: AppColors.orange),
+                ),
+              ),
+            const SizedBox(height: 16),
+            const SectionHeader('البيانات اليومية'),
+            if (daily.isEmpty)
+              const ListTile(title: Text('لا توجد بيانات يومية')),
+            ...daily.map(
+              (d) => ListTile(
+                title: Text(Fmt.date(d['date'])),
+                subtitle: Text('صافي: ${Fmt.money(d['net_earnings'])}'),
+                trailing: Text(Fmt.money(d['gross_sales'] ?? d['total_sales'])),
+              ),
+            ),
+            const Divider(),
+            const SectionHeader('الفواتير'),
+            if (invoices.isEmpty) const ListTile(title: Text('لا توجد فواتير')),
+            ...invoices.map(
+              (inv) => ListTile(
+                title: Text('#${inv['order_id'] ?? inv['id']}'),
+                subtitle: Text(
+                  Fmt.date(inv['created_at'] ?? inv['date'], withTime: true),
+                ),
+                trailing: Text(
+                  Fmt.money(
+                    inv['total'] ?? inv['net_amount'] ?? inv['final_total'],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _chip(String label, dynamic value) {
-    return Chip(label: Text('$label: ${value ?? 0}'));
+  Widget _chip(String label, dynamic value, {bool money = true}) {
+    final text = money ? Fmt.money(value ?? 0) : J.str(value, '0');
+    return Chip(label: Text('$label: $text'));
   }
 }
 
@@ -1549,7 +1489,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   bool loading = true;
   String? error;
 
-  String _iso(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
@@ -1561,12 +1502,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _load() async {
-    if (mounted) setState(() { loading = true; error = null; });
-    final a = await app.api.salesReports(startDate: start, endDate: end);
-    final b = await app.api.productSalesReports(startDate: start, endDate: end);
+    if (mounted)
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    final results = await Future.wait([
+      app.api.salesReports(startDate: start, endDate: end),
+      app.api.productSalesReports(startDate: start, endDate: end),
+    ]);
     if (!mounted) return;
+    final a = results[0];
+    final b = results[1];
     setState(() {
-      sales = a.list('salesReports').isNotEmpty ? a.list('salesReports') : a.dataMaps;
+      sales = a.list('salesReports').isNotEmpty
+          ? a.list('salesReports')
+          : a.dataMaps;
       products = b.dataMaps;
       loading = false;
       if (!a.ok || !b.ok) {
@@ -1582,7 +1533,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       body: Column(
         children: [
           ListTile(
-            title: Text('من $start إلى $end'),
+            title: Text('من ${Fmt.date(start)} إلى ${Fmt.date(end)}'),
             trailing: const Icon(Icons.date_range),
             onTap: () async {
               final s = await pickDate(context);
@@ -1604,216 +1555,52 @@ class _ReportsScreenState extends State<ReportsScreen> {
               emptyIcon: Icons.bar_chart_outlined,
               child: ListView(
                 children: [
-                  const ListTile(title: Text('المبيعات', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ...sales.map((s) => ListTile(
-                        title: Text(J.str(s['product_name'] ?? s['user_name'])),
-                        subtitle: Text(J.str(s['added_date'] ?? s['created_at'])),
-                        trailing: Text(J.str(s['sub_total'] ?? s['final_total'])),
-                      )),
-                  const ListTile(title: Text('حسب المنتج', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ...products.map((p) => ListTile(
-                        title: Text(J.str(p['product_name'] ?? p['name'])),
-                        subtitle: Text('مبيعات ${p['total_sales'] ?? '-'}'),
-                        trailing: Text(J.str(p['total_price'] ?? p['sub_total'])),
-                      )),
+                  const ListTile(
+                    title: Text(
+                      'المبيعات',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ...sales.map(
+                    (s) => ListTile(
+                      title: Text(
+                        J.str(s['product_name'] ?? s['user_name'], 'طلب'),
+                      ),
+                      subtitle: Text(
+                        Fmt.date(
+                          s['added_date'] ?? s['created_at'],
+                          withTime: true,
+                        ),
+                      ),
+                      trailing: Text(
+                        Fmt.money(s['sub_total'] ?? s['final_total']),
+                      ),
+                    ),
+                  ),
+                  const ListTile(
+                    title: Text(
+                      'حسب المنتج',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ...products.map(
+                    (p) => ListTile(
+                      title: Text(
+                        J.str(p['product_name'] ?? p['name'], 'منتج'),
+                      ),
+                      subtitle: Text(
+                        'الكمية المبيعة: ${J.str(p['total_sales'], '-')}',
+                      ),
+                      trailing: Text(
+                        Fmt.money(p['total_price'] ?? p['sub_total']),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class ReturnsScreen extends StatefulWidget {
-  const ReturnsScreen({super.key});
-  @override
-  State<ReturnsScreen> createState() => _ReturnsScreenState();
-}
-
-class _ReturnsScreenState extends State<ReturnsScreen> {
-  List<Map<String, dynamic>> items = [];
-  List<Map<String, dynamic>> boys = [];
-  bool loading = true;
-  String? error;
-
-  Future<void> _load() async {
-    final result = await app.api.returnRequests();
-    final db = await app.api.deliveryBoys();
-    if (!mounted) return;
-    setState(() {
-      items = result.dataMaps;
-      boys = db.dataMaps;
-      loading = false;
-      error = result.ok ? null : result.failMessage;
-    });
-  }
-
-  String _status(dynamic value) {
-    switch (J.i(value)) {
-      case 2:
-        return 'مقبول';
-      case 3:
-        return 'مرفوض';
-      default:
-        return 'قيد الانتظار';
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('طلبات الإرجاع')),
-      body: FetchBody(
-        loading: loading,
-        onRefresh: _load,
-        error: error,
-        isEmpty: items.isEmpty,
-        emptyText: 'لا توجد طلبات إرجاع',
-        child: ListView(
-                    children: items
-                        .map(
-                          (item) => ListTile(
-                            title: Text('${J.str(item['product_name'])} • ${J.str(item['name'])}'),
-                            subtitle: Text('${_status(item['status'])} • ${J.str(item['reason'] ?? item['remarks'])}'),
-                            trailing: J.i(item['status']) != 1 || !app.canWrite
-                                ? null
-                                : PopupMenuButton<int>(
-                                    onSelected: (status) async {
-                                      final ok = await confirmAction(
-                                        context,
-                                        title: status == 2 ? 'قبول الإرجاع' : 'رفض الإرجاع',
-                                        body: status == 2
-                                            ? 'قبول طلب الإرجاع؟'
-                                            : 'رفض طلب الإرجاع؟',
-                                      );
-                                      if (!ok || !context.mounted) return;
-                                      dynamic boy;
-                                      if (status == 2 && boys.isNotEmpty) {
-                                        boy = boys.first['id'];
-                                      }
-                                      final result = await app.api.updateReturn(
-                                        id: item['id'],
-                                        status: status,
-                                        deliveryBoyId: boy,
-                                      );
-                                      if (!context.mounted) return;
-                                      toast(context, result.ok ? 'تم التحديث' : result.message);
-                                      if (result.ok) _load();
-                                    },
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(value: 2, child: Text('قبول')),
-                                      PopupMenuItem(value: 3, child: Text('رفض')),
-                                    ],
-                                  ),
-                          ),
-                        )
-                        .toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class MailSettingsScreen extends StatefulWidget {
-  const MailSettingsScreen({super.key});
-  @override
-  State<MailSettingsScreen> createState() => _MailSettingsScreenState();
-}
-
-class _MailSettingsScreenState extends State<MailSettingsScreen> {
-  List<Map<String, dynamic>> statuses = [];
-  final mail = <int, bool>{};
-  final mobile = <int, bool>{};
-  final sms = <int, bool>{};
-  bool loading = true;
-  bool busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final st = await app.api.orderStatuses();
-    final set = await app.api.mailSettings();
-    statuses = st.dataMaps;
-    final rows = set.dataMaps.isNotEmpty ? set.dataMaps : [set.dataMap];
-    for (final status in statuses) {
-      final id = J.i(status['id']);
-      mail[id] = true;
-      mobile[id] = true;
-      sms[id] = true;
-    }
-    for (final row in rows) {
-      final id = J.i(row['order_status_id'] ?? row['status_id']);
-      if (id == 0) continue;
-      mail[id] = J.flag(row['mail_status'] ?? row['mail']);
-      mobile[id] = J.flag(row['mobile_status'] ?? row['mobile']);
-      sms[id] = J.flag(row['sms_status'] ?? row['sms']);
-    }
-    if (!mounted) return;
-    setState(() => loading = false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('إشعارات الطلبات')),
-      body: FetchBody(
-        loading: loading,
-        onRefresh: _load,
-        error: null,
-        isEmpty: statuses.isEmpty,
-        emptyText: 'لا توجد حالات طلب لضبط الإشعارات',
-        emptyActionLabel: 'إعادة المحاولة',
-        onEmptyAction: _load,
-        child: ListView(
-              children: [
-                ...statuses.map((s) {
-                  final id = J.i(s['id']);
-                  return ExpansionTile(
-                    title: Text(J.str(s['status'] ?? s['name'])),
-                    children: [
-                      SwitchListTile(title: const Text('بريد'), value: mail[id] ?? true, onChanged: (v) => setState(() => mail[id] = v)),
-                      SwitchListTile(title: const Text('جوال'), value: mobile[id] ?? true, onChanged: (v) => setState(() => mobile[id] = v)),
-                      SwitchListTile(title: const Text('رسالة'), value: sms[id] ?? true, onChanged: (v) => setState(() => sms[id] = v)),
-                    ],
-                  );
-                }),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: FilledButton(
-                    onPressed: busy
-                        ? null
-                        : () async {
-                            if (!await confirmWrite(context)) return;
-                            setState(() => busy = true);
-                            final ids = statuses.map((s) => J.i(s['id'])).toList();
-                            final result = await app.api.saveMailSettings({
-                              'status_ids': ids.join(','),
-                              'mail_statuses': ids.map((id) => (mail[id] ?? true) ? 1 : 0).join(','),
-                              'mobile_statuses': ids.map((id) => (mobile[id] ?? true) ? 1 : 0).join(','),
-                              'sms_statuses': ids.map((id) => (sms[id] ?? true) ? 1 : 0).join(','),
-                            });
-                            if (!mounted) return;
-                            setState(() => busy = false);
-                            if (!context.mounted) return;
-                            toast(context, result.ok ? 'تم الحفظ' : result.message);
-                          },
-                    child: busy ? const BusySpinner() : const Text('حفظ'),
-                  ),
-                ),
-              ],
-            ),
       ),
     );
   }
@@ -1913,7 +1700,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 DropdownButtonFormField<String>(
                   key: ValueKey('profile-city-${cities.length}-$cityId'),
                   initialValue: dropdownId(cityId, cities),
-                  items: cities.map((c) => DropdownMenuItem(value: '${c['id']}', child: Text(J.str(c['name'])))).toList(),
+                  items: cities
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: '${c['id']}',
+                          child: Text(J.str(c['name'])),
+                        ),
+                      )
+                      .toList(),
                   onChanged: (v) => setState(() => cityId = v),
                   decoration: const InputDecoration(labelText: 'المدينة'),
                 ),
@@ -1921,19 +1715,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const SectionHeader('البيانات البنكية والضريبية (مطابق saveSellerDetails)'),
+          const SectionHeader('البيانات البنكية والضريبية (اختيارية)'),
           BrandedCard(
             child: Column(
               children: [
-                labeledField(bankName, 'البنك'),
-                labeledField(accountName, 'اسم الحساب'),
-                labeledField(accountNumber, 'رقم الحساب'),
-                labeledField(ifsc, 'رمز البنك'),
+                labeledField(bankName, 'اسم البنك'),
+                labeledField(accountName, 'اسم صاحب الحساب'),
+                labeledField(accountNumber, 'رقم الحساب / الآيبان'),
+                labeledField(ifsc, 'رمز البنك أو الفرع (اختياري)'),
                 labeledField(taxName, 'الاسم الضريبي'),
                 labeledField(taxNumber, 'الرقم الضريبي'),
-                labeledField(panNumber, 'رقم PAN'),
-                labeledField(pincode, 'الرمز البريدي', type: TextInputType.number),
-                labeledField(stateCtrl, 'المحافظة/الولاية'),
+                labeledField(panNumber, 'الرقم الضريبي الشخصي (اختياري)'),
+                labeledField(
+                  pincode,
+                  'الرمز البريدي (اختياري)',
+                  type: TextInputType.number,
+                ),
+                labeledField(stateCtrl, 'المحافظة / الولاية'),
               ],
             ),
           ),
@@ -1946,7 +1744,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () async {
               final file = await pickStoreImage(
                 context,
-                reason: 'سنفتح المعرض لاختيار شعار المتجر فقط. لا نصل إلى صورك الأخرى.',
+                reason:
+                    'سنفتح المعرض لاختيار شعار المتجر فقط. لا نصل إلى صورك الأخرى.',
               );
               if (file != null && mounted) setState(() => logoPath = file.path);
             },
@@ -1959,22 +1758,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () async {
               final file = await pickStoreImage(
                 context,
-                reason: 'سنفتح المعرض لاختيار إثبات العنوان فقط. لا نصل إلى صورك الأخرى.',
+                reason:
+                    'سنفتح المعرض لاختيار إثبات العنوان فقط. لا نصل إلى صورك الأخرى.',
               );
-              if (file != null && mounted) setState(() => proofPath = file.path);
+              if (file != null && mounted)
+                setState(() => proofPath = file.path);
             },
           ),
           const SizedBox(height: 12),
           UploadDropZone(
-            label: nationalIdPath == null ? 'البطاقة الوطنية' : 'تم اختيار البطاقة ✓',
+            label: nationalIdPath == null
+                ? 'البطاقة الوطنية'
+                : 'تم اختيار البطاقة ✓',
             selected: nationalIdPath != null,
             subtitle: 'مطلوبة إن لم تكن مرفوعة من قبل',
             onTap: () async {
               final file = await pickStoreImage(
                 context,
-                reason: 'سنفتح المعرض لاختيار صورة البطاقة الوطنية فقط. لا نصل إلى صورك الأخرى.',
+                reason:
+                    'سنفتح المعرض لاختيار صورة البطاقة الوطنية فقط. لا نصل إلى صورك الأخرى.',
               );
-              if (file != null && mounted) setState(() => nationalIdPath = file.path);
+              if (file != null && mounted)
+                setState(() => nationalIdPath = file.path);
             },
           ),
           const SizedBox(height: 20),
@@ -1983,12 +1788,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ? null
                 : () async {
                     if (!await confirmWrite(context)) return;
-                    if (name.text.trim().isEmpty || store.text.trim().isEmpty || mobile.text.trim().isEmpty) {
+                    if (name.text.trim().isEmpty ||
+                        store.text.trim().isEmpty ||
+                        mobile.text.trim().isEmpty) {
                       toast(context, 'أكمل الاسم واسم المتجر والجوال');
                       return;
                     }
                     setState(() => busy = true);
-                    final city = cities.cast<Map<String, dynamic>?>().firstWhere(
+                    final city = cities
+                        .cast<Map<String, dynamic>?>()
+                        .firstWhere(
                           (c) => '${c?['id']}' == cityId,
                           orElse: () => cities.isNotEmpty ? cities.first : null,
                         );
@@ -2002,9 +1811,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'street': address.text,
                       'city_id': cityId ?? app.seller['city_id'],
                       'categories_ids': J.str(app.seller['categories']),
-                      'store_url': J.str(app.seller['store_url'] ?? app.seller['slug'] ?? store.text),
-                      'latitude': city?['latitude'] ?? app.seller['latitude'] ?? 0,
-                      'longitude': city?['longitude'] ?? app.seller['longitude'] ?? 0,
+                      'store_url': J.str(
+                        app.seller['store_url'] ??
+                            app.seller['slug'] ??
+                            store.text,
+                      ),
+                      'latitude':
+                          city?['latitude'] ?? app.seller['latitude'] ?? 0,
+                      'longitude':
+                          city?['longitude'] ?? app.seller['longitude'] ?? 0,
                       'account_number': accountNumber.text,
                       'bank_name': bankName.text,
                       'account_name': accountName.text,
@@ -2012,13 +1827,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'tax_name': taxName.text,
                       'tax_number': taxNumber.text,
                       'pan_number': panNumber.text,
-                      if (pincode.text.trim().isNotEmpty) 'pincode_id': pincode.text.trim(),
-                      if (stateCtrl.text.trim().isNotEmpty) 'state': stateCtrl.text.trim(),
+                      if (pincode.text.trim().isNotEmpty)
+                        'pincode_id': pincode.text.trim(),
+                      if (stateCtrl.text.trim().isNotEmpty)
+                        'state': stateCtrl.text.trim(),
                     };
-                    if (logoPath != null) map['store_logo'] = await MultipartFile.fromFile(logoPath!, filename: 'logo.jpg');
-                    if (proofPath != null) map['address_proof'] = await MultipartFile.fromFile(proofPath!, filename: 'proof.jpg');
-                    if (nationalIdPath != null) map['national_id_card'] = await MultipartFile.fromFile(nationalIdPath!, filename: 'national_id.jpg');
-                    final result = await app.api.saveSellerDetails(FormData.fromMap(map));
+                    if (logoPath != null)
+                      map['store_logo'] = await MultipartFile.fromFile(
+                        logoPath!,
+                        filename: 'logo.jpg',
+                      );
+                    if (proofPath != null)
+                      map['address_proof'] = await MultipartFile.fromFile(
+                        proofPath!,
+                        filename: 'proof.jpg',
+                      );
+                    if (nationalIdPath != null)
+                      map['national_id_card'] = await MultipartFile.fromFile(
+                        nationalIdPath!,
+                        filename: 'national_id.jpg',
+                      );
+                    final result = await app.api.saveSellerDetails(
+                      FormData.fromMap(map),
+                    );
                     if (!mounted) return;
                     setState(() => busy = false);
                     if (!context.mounted) return;
@@ -2047,7 +1878,11 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
   String? error;
 
   Future<void> _load() async {
-    if (mounted) setState(() { loading = true; error = null; });
+    if (mounted)
+      setState(() {
+        loading = true;
+        error = null;
+      });
     final r = await app.api.sellerSections(activeOnly: false);
     if (!mounted) return;
     setState(() {
@@ -2066,8 +1901,12 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
   Future<void> _form([Map<String, dynamic>? item]) async {
     if (!await confirmWrite(context)) return;
     final name = TextEditingController(text: J.str(item?['name']));
-    final rowOrder = TextEditingController(text: J.str(item?['row_order'], '0'));
-    bool always = item == null ? true : J.i(item['is_always_available'], 1) == 1;
+    final rowOrder = TextEditingController(
+      text: J.str(item?['row_order'], '0'),
+    );
+    bool always = item == null
+        ? true
+        : J.i(item['is_always_available'], 1) == 1;
     String from = J.str(item?['available_from']);
     String to = J.str(item?['available_to']);
     int status = J.i(item?['status'], 1);
@@ -2080,31 +1919,82 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم *', border: OutlineInputBorder())),
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(
+                    labelText: 'الاسم *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 const SizedBox(height: 10),
-                TextField(controller: rowOrder, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'الترتيب', border: OutlineInputBorder())),
-                SwitchListTile(title: const Text('متاح طوال الوقت'), value: always, onChanged: (v) => setDlg(() => always = v)),
+                TextField(
+                  controller: rowOrder,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'الترتيب',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                SwitchListTile(
+                  title: const Text('متاح طوال الوقت'),
+                  value: always,
+                  onChanged: (v) => setDlg(() => always = v),
+                ),
                 if (!always)
                   Row(
                     children: [
-                      Expanded(child: OutlinedButton(onPressed: () async {
-                        final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
-                        if (t != null) setDlg(() => from = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
-                      }, child: Text(from.isEmpty ? 'من' : from))),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final t = await showTimePicker(
+                              context: ctx,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (t != null)
+                              setDlg(
+                                () => from =
+                                    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                              );
+                          },
+                          child: Text(from.isEmpty ? 'من' : from),
+                        ),
+                      ),
                       const SizedBox(width: 8),
-                      Expanded(child: OutlinedButton(onPressed: () async {
-                        final t = await showTimePicker(context: ctx, initialTime: TimeOfDay.now());
-                        if (t != null) setDlg(() => to = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
-                      }, child: Text(to.isEmpty ? 'إلى' : to))),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () async {
+                            final t = await showTimePicker(
+                              context: ctx,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (t != null)
+                              setDlg(
+                                () => to =
+                                    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}',
+                              );
+                          },
+                          child: Text(to.isEmpty ? 'إلى' : to),
+                        ),
+                      ),
                     ],
                   ),
-                SwitchListTile(title: const Text('نشط'), value: status == 1, onChanged: (v) => setDlg(() => status = v ? 1 : 0)),
+                SwitchListTile(
+                  title: const Text('نشط'),
+                  value: status == 1,
+                  onChanged: (v) => setDlg(() => status = v ? 1 : 0),
+                ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حفظ'),
+            ),
           ],
         ),
       ),
@@ -2118,7 +2008,8 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
       return;
     }
     if (!always && (from.isEmpty || to.isEmpty)) {
-      if (mounted) toast(context, 'حدد وقت البداية والنهاية أو اختر متاح طوال الوقت');
+      if (mounted)
+        toast(context, 'حدد وقت البداية والنهاية أو اختر متاح طوال الوقت');
       return;
     }
     final body = <String, dynamic>{
@@ -2130,7 +2021,9 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
       if (!always) 'available_to': to,
       if (item != null) 'id': item['id'],
     };
-    final r = item == null ? await app.api.saveSellerSection(body) : await app.api.updateSellerSection(body);
+    final r = item == null
+        ? await app.api.saveSellerSection(body)
+        : await app.api.updateSellerSection(body);
     if (!mounted) return;
     toast(context, r.ok ? 'تم الحفظ' : r.message);
     if (r.ok) _load();
@@ -2140,7 +2033,12 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('أقسام المتجر')),
-      floatingActionButton: app.canWrite ? FloatingActionButton(onPressed: () => _form(), child: const Icon(Icons.add)) : null,
+      floatingActionButton: app.canWrite
+          ? FloatingActionButton(
+              onPressed: () => _form(),
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: FetchBody(
         loading: loading,
         onRefresh: _load,
@@ -2156,20 +2054,39 @@ class _SellerSectionsScreenState extends State<SellerSectionsScreen> {
             final always = J.i(it['is_always_available'], 1) == 1;
             return ListTile(
               tileColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               title: Text(J.str(it['name'])),
-              subtitle: Text(always ? 'متاح طوال الوقت • ترتيب ${J.str(it['row_order'], '0')}' : '${J.str(it['available_from'])} - ${J.str(it['available_to'])}'),
-              trailing: J.i(it['status'], 1) == 1 ? null : const Icon(Icons.visibility_off_outlined),
+              subtitle: Text(
+                always
+                    ? 'متاح طوال الوقت • ترتيب ${J.str(it['row_order'], '0')}'
+                    : '${J.str(it['available_from'])} - ${J.str(it['available_to'])}',
+              ),
+              trailing: J.i(it['status'], 1) == 1
+                  ? null
+                  : const Icon(Icons.visibility_off_outlined),
               onTap: app.canWrite ? () => _form(it) : null,
-              leading: app.canWrite ? IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async {
-                if (!await confirmWrite(context)) return;
-                final ok = await confirmAction(context, title: 'حذف القسم', body: 'حذف ${J.str(it['name'])}؟ (تُفك منتجاته)', confirmLabel: 'حذف');
-                if (!ok || !context.mounted) return;
-                final r = await app.api.deleteSellerSection(it['id']);
-                if (!context.mounted) return;
-                toast(context, r.ok ? 'تم الحذف' : r.message);
-                if (r.ok) _load();
-              }) : null,
+              leading: app.canWrite
+                  ? IconButton(
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () async {
+                        if (!await confirmWrite(context)) return;
+                        final ok = await confirmAction(
+                          context,
+                          title: 'حذف القسم',
+                          body: 'حذف ${J.str(it['name'])}؟ (تُفك منتجاته)',
+                          confirmLabel: 'حذف',
+                          destructive: true,
+                        );
+                        if (!ok || !context.mounted) return;
+                        final r = await app.api.deleteSellerSection(it['id']);
+                        if (!context.mounted) return;
+                        toast(context, r.ok ? 'تم الحذف' : r.message);
+                        if (r.ok) _load();
+                      },
+                    )
+                  : null,
             );
           },
         ),
@@ -2191,9 +2108,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool loading = true;
   bool busyHours = false;
   bool busyPass = false;
+  bool busyOpen = false;
   String storeName = '';
   String openingTime = '';
   String closingTime = '';
+  String statusOverride = 'auto';
   bool isOpen = true;
   String? nextOpeningAt;
   String? nextOpeningDate;
@@ -2243,6 +2162,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       openingTime = normTime(J.str(d['opening_time']));
       closingTime = normTime(J.str(d['closing_time']));
       isOpen = d['is_open'] != false;
+      final ov = J.str(d['status_override']);
+      statusOverride = (ov == 'open' || ov == 'closed') ? ov : 'auto';
       final n = J.str(d['next_opening_at']);
       nextOpeningAt = n.isEmpty ? null : n;
       final nd = J.str(d['next_opening_date']);
@@ -2254,7 +2175,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     TimeOfDay initial = TimeOfDay.now();
     final m = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(current);
     if (m != null) {
-      initial = TimeOfDay(hour: int.parse(m.group(1)!) % 24, minute: int.parse(m.group(2)!));
+      initial = TimeOfDay(
+        hour: int.parse(m.group(1)!) % 24,
+        minute: int.parse(m.group(2)!),
+      );
     }
     return showTimePicker(context: context, initialTime: initial);
   }
@@ -2265,15 +2189,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveHours() async {
     if (!await confirmWrite(context)) return;
     setState(() => busyHours = true);
-    final r = await app.api.saveBusinessHours(openingTime: openingTime, closingTime: closingTime);
+    final r = await app.api.saveBusinessHours(
+      openingTime: openingTime,
+      closingTime: closingTime,
+    );
     if (!mounted) return;
     setState(() => busyHours = false);
     toast(context, r.ok ? 'تم الحفظ' : r.message);
     if (r.ok) _load();
   }
 
+  Future<void> _setStatusOverride(String? value) async {
+    if (busyOpen || value == null || value == statusOverride) return;
+    setState(() => busyOpen = true);
+    final r = await app.api.saveBusinessHours(
+      openingTime: openingTime,
+      closingTime: closingTime,
+      statusOverride: value,
+    );
+    if (!mounted) return;
+    setState(() => busyOpen = false);
+    if (!r.ok) {
+      toast(context, r.message);
+      return;
+    }
+    await _load();
+    if (!mounted) return;
+    toast(
+      context,
+      statusOverride == value
+          ? 'تم تحديث حالة المتجر'
+          : 'الخادم لم يطبّق الحالة اليدوية؛ حدّث الباك اند ثم أعد المحاولة.',
+    );
+  }
+
   Future<void> _savePassword() async {
-    if (username.text.trim().isEmpty || currentPassword.text.isEmpty || newPassword.text.isEmpty) {
+    if (username.text.trim().isEmpty ||
+        currentPassword.text.isEmpty ||
+        newPassword.text.isEmpty) {
       toast(context, 'أكمل جميع الحقول');
       return;
     }
@@ -2321,22 +2274,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 8,
                       children: [
-                        Text(storeName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        Text(
+                          storeName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: isOpen ? Colors.green : Colors.red,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(isOpen ? 'مفتوح الآن' : 'مغلق الآن',
-                              style: const TextStyle(color: Colors.white, fontSize: 12)),
+                          child: Text(
+                            isOpen ? 'مفتوح الآن' : 'مغلق الآن',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                         if (!isOpen && nextOpeningAt != null)
-                          Text('$nextOpeningAt${nextOpeningDate != null ? ' ($nextOpeningDate)' : ''}',
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                          Text(
+                            '$nextOpeningAt${nextOpeningDate != null ? ' ($nextOpeningDate)' : ''}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                       ],
                     ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 4),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('store-status-$statusOverride'),
+                          initialValue: statusOverride,
+                          decoration: const InputDecoration(
+                            labelText: 'حالة المتجر',
+                            helperText:
+                                'تلقائي يتبع الساعات، واليدوي يتجاوزها حتى تعيده',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'auto',
+                              child: Text('حسب ساعات العمل'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'open',
+                              child: Text('فتح الآن'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'closed',
+                              child: Text('إغلاق الآن'),
+                            ),
+                          ],
+                          onChanged: busyOpen ? null : _setStatusOverride,
+                        ),
+                      ),
+                      if (busyOpen)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 18, right: 8),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
@@ -2346,7 +2357,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             if (t != null) setState(() => openingTime = fmt(t));
                           },
                           icon: const Icon(Icons.access_time),
-                          label: Text(openingTime.isEmpty ? 'وقت الفتح' : 'الفتح: $openingTime'),
+                          label: Text(
+                            openingTime.isEmpty
+                                ? 'وقت الفتح'
+                                : 'الفتح: $openingTime',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -2357,7 +2372,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             if (t != null) setState(() => closingTime = fmt(t));
                           },
                           icon: const Icon(Icons.access_time),
-                          label: Text(closingTime.isEmpty ? 'وقت الإغلاق' : 'الإغلاق: $closingTime'),
+                          label: Text(
+                            closingTime.isEmpty
+                                ? 'وقت الإغلاق'
+                                : 'الإغلاق: $closingTime',
+                          ),
                         ),
                       ),
                     ],
@@ -2373,7 +2392,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: busyHours ? null : _saveHours,
-                      child: busyHours ? const BusySpinner() : const Text('حفظ'),
+                      child: busyHours
+                          ? const BusySpinner()
+                          : const Text('حفظ'),
                     ),
                   ),
                 ],
@@ -2384,7 +2405,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             BrandedCard(
               child: Column(
                 children: [
-                  TextField(controller: username, decoration: const InputDecoration(labelText: 'اسم المستخدم', border: OutlineInputBorder())),
+                  TextField(
+                    controller: username,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم المستخدم',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: currentPassword,
@@ -2393,8 +2420,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       labelText: 'كلمة المرور الحالية',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(obscureCurrent ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => obscureCurrent = !obscureCurrent),
+                        icon: Icon(
+                          obscureCurrent
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () =>
+                            setState(() => obscureCurrent = !obscureCurrent),
                       ),
                     ),
                   ),
@@ -2406,8 +2438,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       labelText: 'كلمة المرور الجديدة',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(obscureNew ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => obscureNew = !obscureNew),
+                        icon: Icon(
+                          obscureNew ? Icons.visibility_off : Icons.visibility,
+                        ),
+                        onPressed: () =>
+                            setState(() => obscureNew = !obscureNew),
                       ),
                     ),
                   ),
@@ -2419,8 +2454,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       labelText: 'تأكيد كلمة المرور',
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => obscureConfirm = !obscureConfirm),
+                        icon: Icon(
+                          obscureConfirm
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () =>
+                            setState(() => obscureConfirm = !obscureConfirm),
                       ),
                     ),
                   ),
