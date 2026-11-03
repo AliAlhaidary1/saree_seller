@@ -10,6 +10,7 @@ import '../core/push_service.dart';
 import '../core/theme.dart';
 import '../widgets/common.dart';
 import '../widgets/branded_skeleton.dart';
+import 'onboarding/app_tutorial.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -232,6 +233,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     childAspectRatio: aspect,
                     children: [
                       KpiMetricCard(
+                        key: AppTutorialKeys.summary,
                         icon: Icons.payments_outlined,
                         label: 'مبيعات 7 أيام',
                         value: totalSales,

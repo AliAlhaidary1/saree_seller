@@ -27,6 +27,17 @@ class AppController extends ChangeNotifier {
   BrandConfig brand = BrandConfig.defaults;
 
   bool get isLoggedIn => token != null && token!.isNotEmpty;
+  // شاشات البداية وجولة التلميحات — تُعرض مرة واحدة لكل جهاز.
+  bool get onboardingCompleted =>
+      _prefs.getBool('first_run_onboarding_v1') ?? false;
+  bool get appTutorialCompleted =>
+      _prefs.getBool('first_run_tutorial_v1') ?? false;
+
+  Future<void> completeOnboarding() =>
+      _prefs.setBool('first_run_onboarding_v1', true);
+  Future<void> completeAppTutorial() =>
+      _prefs.setBool('first_run_tutorial_v1', true);
+
   Map<String, dynamic> get seller => J.map(user?['seller']);
   int get sellerStatus => J.i(seller['status']);
   bool get isPending => sellerStatus == 0;

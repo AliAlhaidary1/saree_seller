@@ -9,6 +9,7 @@ import 'core/theme.dart';
 import 'features/auth_screens.dart';
 import 'features/main_screens.dart';
 import 'features/manage_screens.dart';
+import 'features/onboarding/app_tutorial.dart';
 import 'features/seller_parity_screens.dart';
 
 GoRouter buildRouter() {
@@ -244,104 +245,113 @@ class SellerShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: index == 0
-          ? AppBar(
-              title: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'assets/brand/logo.webp',
-                      height: 36,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.storefront),
+    final isHome = index == 0;
+    return AppTutorial(
+      enabled: isHome && app.onboardingCompleted && !app.appTutorialCompleted,
+      child: Scaffold(
+        appBar: index == 0
+            ? AppBar(
+                title: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        'assets/brand/logo.webp',
+                        height: 36,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.storefront),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          app.storeName,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            app.storeName,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        const Text(
-                          'سريع MART',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.white70,
+                          const Text(
+                            'سريع MART',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white70,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    key: isHome ? AppTutorialKeys.notifications : null,
+                    tooltip: 'الطلبات',
+                    onPressed: () => context.push('/orders'),
+                    icon: Badge(
+                      isLabelVisible:
+                          (app.dashboard['pending_order_count'] ?? 0) > 0,
+                      label: Text(
+                        '${app.dashboard['pending_order_count'] ?? 0}',
+                      ),
+                      backgroundColor: AppColors.orange,
+                      child: const Icon(Icons.notifications_outlined),
                     ),
                   ),
                 ],
-              ),
-              actions: [
-                IconButton(
-                  tooltip: 'الطلبات',
-                  onPressed: () => context.push('/orders'),
-                  icon: Badge(
-                    isLabelVisible:
-                        (app.dashboard['pending_order_count'] ?? 0) > 0,
-                    label: Text('${app.dashboard['pending_order_count'] ?? 0}'),
-                    backgroundColor: AppColors.orange,
-                    child: const Icon(Icons.notifications_outlined),
-                  ),
+              )
+            : null,
+        body: SafeArea(top: false, child: child),
+        bottomNavigationBar: SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, -2),
                 ),
               ],
-            )
-          : null,
-      body: SafeArea(top: false, child: child),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: NavigationBar(
-            height: 68,
-            selectedIndex: index,
-            onDestinationSelected: (i) {
-              switch (i) {
-                case 0:
-                  context.go('/');
-                case 1:
-                  context.go('/products');
-                case 2:
-                  context.go('/account');
-              }
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: 'الرئيسية',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.inventory_2_outlined),
-                selectedIcon: Icon(Icons.inventory_2),
-                label: 'المنتجات',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: 'حسابي',
-              ),
-            ],
+            ),
+            child: NavigationBar(
+              height: 68,
+              selectedIndex: index,
+              onDestinationSelected: (i) {
+                switch (i) {
+                  case 0:
+                    context.go('/');
+                  case 1:
+                    context.go('/products');
+                  case 2:
+                    context.go('/account');
+                }
+              },
+              destinations: [
+                const NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'الرئيسية',
+                ),
+                NavigationDestination(
+                  key: isHome ? AppTutorialKeys.products : null,
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  selectedIcon: const Icon(Icons.inventory_2),
+                  label: 'المنتجات',
+                ),
+                NavigationDestination(
+                  key: isHome ? AppTutorialKeys.account : null,
+                  icon: const Icon(Icons.person_outline),
+                  selectedIcon: const Icon(Icons.person),
+                  label: 'حسابي',
+                ),
+              ],
+            ),
           ),
         ),
       ),
