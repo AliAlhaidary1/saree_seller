@@ -1,9 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 
-/// إعدادات Firebase لمشروع sreamart.
+/// إعدادات Firebase لمشروع saree-market.
 ///
 /// لاستقبال الإشعارات والتطبيق **مغلق تماماً** يلزم سطر واحد فقط:
-/// 1) Firebase Console ← مشروع sreamart ← Add app ← Android.
+/// 1) Firebase Console ← مشروع saree-market ← Add app ← Android.
 /// 2) سجّل package name: `com.sreamart.sreamart_seller`.
 /// 3) انسخ قيمة appId التي تظهر بشكل `1:615854672127:android:XXXXXXXX`
 ///    والصقها في [androidAppId] أدناه ثم أعد بناء التطبيق.
@@ -12,18 +12,18 @@ import 'package:firebase_core/firebase_core.dart';
 /// برمجياً من هذه القيم، وتُحفظ نسخة في التخزين المحلي لتعمل حتى في
 /// عزلة الخلفية (التطبيق مقتول) قبل أي تسجيل دخول.
 class FirebaseConfig {
-  static const String apiKey = 'AIzaSyCwH0a0pbRT2hqu_z-BHlJLzqYOUaDR4zM';
+  static const String apiKey = 'AIzaSyCk-izCfnQbJvzteb2Uw8twDAylfe0m2JI';
 
   /// Web appId (للباكند/الويب — لا يعمل على أندرويد).
   static const String appId = '1:615854672127:web:596f455d7a2b93c2b824ca';
 
-  /// ⬅️ الصق هنا Android appId من Firebase Console (إلزامي للإشعارات).
-  static const String androidAppId = '';
+  /// Android appId المسجل للحزمة com.sreamart.sreamart_seller.
+  static const String androidAppId = '1:615854672127:android:6291eb9901825147b824ca';
 
   static const String messagingSenderId = '615854672127';
-  static const String projectId = 'sreamart';
-  static const String storageBucket = 'sreamart.firebasestorage.app';
-  static const String authDomain = 'sreamart.firebaseapp.com';
+  static const String projectId = 'saree-market';
+  static const String storageBucket = 'saree-market.firebasestorage.app';
+  static const String authDomain = 'saree-market.firebaseapp.com';
 
   /// الـ appId الفعّال على أندرويد: الخاص بالأندرويد إن وُجد.
   static String get effectiveAppId =>
