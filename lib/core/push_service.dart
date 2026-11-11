@@ -210,6 +210,12 @@ class PushService {
           settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional;
 
+      // Anonymous broadcast topic — subscribed even before sign-in so guests
+      // receive broadcasts too. Token-free: works without login.
+      try {
+        await FirebaseMessaging.instance.subscribeToTopic('saree_all');
+      } catch (_) {}
+
       try {
         fcmToken = await FirebaseMessaging.instance.getToken();
         await _persistToken(fcmToken);

@@ -5333,7 +5333,7 @@ class AccountScreen extends StatelessWidget {
             const SizedBox(height: 16),
             Center(
               child: Text(
-                'سريع MART - تاجر • الإصدار ${AppConfig.appVersion}',
+                'سريع مارت - تاجر • الإصدار ${AppConfig.appVersion}',
                 style: const TextStyle(
                   fontSize: 11,
                   color: AppColors.textSecondary,

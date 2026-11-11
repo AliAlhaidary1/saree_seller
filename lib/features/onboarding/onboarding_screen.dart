@@ -92,7 +92,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           const SizedBox(width: 9),
                           const Flexible(
                             child: Text(
-                              'سريع MART',
+                              'سريع مارت',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: AppColors.textPrimary,

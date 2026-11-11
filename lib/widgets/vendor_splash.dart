@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// شاشة بداية واحدة فقط — خلفية كحلية سادة (نفس لون الـ Native)
-/// أنيميشن بسيط وسريع: خطوط سرعة + ومضة برق + ظهور اسم سريع MART.
+/// أنيميشن بسيط وسريع: خطوط سرعة + ومضة برق + ظهور اسم سريع مارت.
 class VendorSplashScreen extends StatefulWidget {
   const VendorSplashScreen({super.key, this.error, this.onRetry});
 
@@ -28,7 +28,7 @@ class _VendorSplashScreenState extends State<VendorSplashScreen>
     super.initState();
     _c = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 700),
     );
 
     _lines = Tween<double>(begin: 0.0, end: 1.0).animate(

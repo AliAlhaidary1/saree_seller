@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'config.dart';
 import 'brand_config.dart';
 
-/// SAREE MART Vendor brand palette.
+/// Sarea Mart Vendor brand palette.
 abstract final class AppColors {
   static Color navy = BrandConfig.defaults.navy;
   static Color orange = BrandConfig.defaults.orange;

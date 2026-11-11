@@ -276,7 +276,7 @@ class SellerShell extends StatelessWidget {
                             ),
                           ),
                           const Text(
-                            'سريع MART',
+                            'سريع مارت',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w400,
@@ -369,7 +369,7 @@ class SellerApp extends StatelessWidget {
       listenable: app,
       builder: (context, _) {
         return MaterialApp.router(
-          title: 'سريع MART - تاجر',
+          title: 'سريع مارت - تاجر',
           debugShowCheckedModeBanner: false,
           locale: const Locale('ar'),
           supportedLocales: const [Locale('ar')],

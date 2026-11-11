@@ -41,8 +41,8 @@ class _BootstrapState extends State<Bootstrap> {
 
   Future<void> _boot() async {
     setState(() => error = null);
-    // مدة الأنيميشن المبسط (1400ms) — سريع بدون انتظار زائد
-    final splashMin = Future<void>.delayed(const Duration(milliseconds: 1500));
+    // مدة الأنيميشن المبسط (700ms) — سريعة بدون انتظار زائد
+    final splashMin = Future<void>.delayed(const Duration(milliseconds: 700));
     try {
       await app.bootstrap();
     } catch (e) {

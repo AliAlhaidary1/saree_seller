@@ -15,7 +15,7 @@ class BrandConfig {
 
   static const defaults = BrandConfig(
     version: 1,
-    identity: {'name_ar': 'سريع MART - تاجر', 'name_en': 'SAREE MART - Vendor'},
+    identity: {'name_ar': 'سريع مارت - تاجر', 'name_en': 'Sarea Mart - Vendor'},
     colors: {
       'primary': '#0A2540',
       'accent': '#FF6B00',
